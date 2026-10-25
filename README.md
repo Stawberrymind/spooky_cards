@@ -1,5 +1,8 @@
 # Spooooky Solitaire
 
+GAME LINK: 
+https://stawberrymind.github.io/spooky_cards/
+
 Klondike solitaire in a haunted, pixel-art style that takes after Balatro: wobbly cards, a swirling background, screen shake, particles, haptics, and things watching you from the dark.
 
 ## Run locally
