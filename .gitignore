@@ -1,0 +1,5 @@
+.agent/
+.playwright-cli/
+node_modules/
+Thumbs.db
+dist/

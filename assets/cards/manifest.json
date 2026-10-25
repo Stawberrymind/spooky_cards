@@ -1,0 +1,46 @@
+{
+  "sprite": { "size": 16, "crop": { "x": 3, "y": 1, "width": 9, "height": 13 } },
+  "back": null,
+  "suits": {
+    "hearts": {
+      "color": "#a80000",
+      "symbol": "♥",
+      "cards": {
+        "2": "sprite_cards45.png", "3": "sprite_cards41.png", "4": "sprite_cards38.png", "5": "sprite_cards33.png",
+        "6": "sprite_cards28.png", "7": "sprite_cards24.png", "8": "sprite_cards21.png",
+        "9": "sprite_cards17.png", "10": "sprite_cards13.png", "11": "sprite_cards09.png",
+        "12": "sprite_cards05.png", "13": "sprite_cards00.png", "14": "sprite_cards49.png"
+      }
+    },
+    "diamonds": {
+      "color": "#f15900",
+      "symbol": "♦",
+      "cards": {
+        "2": "sprite_cards47.png", "3": "sprite_cards43.png", "4": "sprite_cards37.png", "5": "sprite_cards35.png",
+        "6": "sprite_cards31.png", "7": "sprite_cards27.png", "8": "sprite_cards23.png",
+        "9": "sprite_cards19.png", "10": "sprite_cards15.png", "11": "sprite_cards11.png",
+        "12": "sprite_cards06.png", "13": "sprite_cards03.png", "14": "sprite_cards50.png"
+      }
+    },
+    "clubs": {
+      "color": "#a39308",
+      "symbol": "♣",
+      "cards": {
+        "2": "sprite_cards44.png", "3": "sprite_cards40.png", "4": "sprite_cards36.png", "5": "sprite_cards32.png",
+        "6": "sprite_cards29.png", "7": "sprite_cards25.png", "8": "sprite_cards20.png",
+        "9": "sprite_cards16.png", "10": "sprite_cards12.png", "11": "sprite_cards08.png",
+        "12": "sprite_cards04.png", "13": "sprite_cards02.png", "14": "sprite_cards48.png"
+      }
+    },
+    "spades": {
+      "color": "#a34108",
+      "symbol": "♠",
+      "cards": {
+        "2": "sprite_cards46.png", "3": "sprite_cards42.png", "4": "sprite_cards39.png", "5": "sprite_cards34.png",
+        "6": "sprite_cards30.png", "7": "sprite_cards26.png", "8": "sprite_cards22.png",
+        "9": "sprite_cards18.png", "10": "sprite_cards14.png", "11": "sprite_cards10.png",
+        "12": "sprite_cards07.png", "13": "sprite_cards01.png", "14": "sprite_cards51.png"
+      }
+    }
+  }
+}
