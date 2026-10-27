@@ -3,7 +3,7 @@
 GAME LINK: 
 https://stawberrymind.github.io/spooky_cards/
 
-Four solitaire games in a haunted, pixel-art style that takes after Balatro: wobbly cards, a swirling background, screen shake, particles, haptics, and things watching you from the dark. Pick the game on the menu.
+Haunted card games in a pixel-art style that takes after Balatro: wobbly cards, a swirling background, screen shake, particles, haptics, and things watching you from the dark. Four solitaires, Texas Hold'em against bots, and Blackjack. Pick the game on the menu.
 
 ## Run locally
 
@@ -19,6 +19,8 @@ Then open the URL Vite prints (usually http://localhost:5173).
 - `npm run preview`: serve the production build
 
 ## How to play
+
+### Solitaire
 
 | Game | Rules | Menu option |
 | --- | --- | --- |
@@ -41,6 +43,27 @@ Scoring ("Souls"):
 - **Spider:** starts at 500, −1 per move, +100 per run laid to rest.
 - **TriPeaks:** 10 × the streak for each card, +150 for each peak, +500 for clearing the table.
 
+### Hold'em
+
+No-limit Texas Hold'em against 1 to 5 bots, tournament style: everyone starts with 1,000 chips, the blinds double every 8 hands, and the last player with chips wins.
+
+- Pick the number of rivals and how good they are on the menu:
+  - **Easy:** calls almost anything and rarely folds.
+  - **Normal:** plays the odds, with the odd bluff.
+  - **Hard:** varies its bet sizes, slow-plays big hands, semi-bluffs draws, and bluffs more when it's one on one.
+- Every bot works out its chance of winning by dealing the rest of the hand out hundreds of times.
+- **Fold** `F`, **Check / Call** `C`, **Bet / Raise** `R`. Use the slider or the Min / ½ pot / Pot / All in buttons to size a raise.
+- Side pots and split pots are handled properly.
+- Simplification: any raise, even a short all-in, re-opens the betting.
+- Leaving mid-hand saves the table as it was before that hand; Continue deals a fresh hand.
+
+### Blackjack
+
+- Six-deck shoe. The dealer stands on all 17s and checks for blackjack. Blackjack pays 3 to 2.
+- Double on any first two cards. Split once; split Aces get one card each.
+- Your bank of souls carries over between visits. Lose it all and the house lends you another 1,000.
+- **Hit** `H`, **Stand** `S`, **Double** `D`, **Split** `P`, **Deal** `Enter`.
+
 ## Code layout
 
 | Path | What it is |
@@ -48,6 +71,10 @@ Scoring ("Souls"):
 | `src/engine/base.js` | What every game provides (moves, hints, layout), plus shared undo and save/load. No DOM. |
 | `src/engine/klondike.js`, `freecell.js`, `spider.js`, `tripeaks.js` | The rules of each game |
 | `src/engine/games.js` | The menu's list of games, their options and start-of-game whispers |
+| `src/engine/poker/` | Hold'em: hand ranking (`hands.js`), the betting and side-pot engine (`holdem.js`), bots (`bot.js`) |
+| `src/engine/blackjack.js` | Blackjack rules and payouts |
+| `src/modes/poker.js`, `src/modes/blackjack.js` | The table screens: play the engine's events back as animation, take your actions |
+| `src/ui/felt.js` | Places cards and chips on the poker and blackjack tables |
 | `src/engine/cards.js` | Card model, seeded shuffle |
 | `src/ui/board.js` | Card rendering, drag and tap input. Places piles from each game's `layout()` |
 | `src/ui/fx.js` | Particles, screen shake, popups, vibration, win cascade |

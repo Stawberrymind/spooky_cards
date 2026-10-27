@@ -48,6 +48,17 @@ export function paintCard(el, card) {
   }
 }
 
+/** A painted .card element (tilt > sway > flip > face/back), not yet in the page. */
+export function cardElement(card) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.dataset.id = card.id;
+  el.innerHTML = '<div class="card-tilt"><div class="card-sway"><div class="card-flip"><div class="card-face"></div><div class="card-back"></div></div></div></div>';
+  el.style.setProperty('--sway-delay', `${(-Math.random() * 3.4).toFixed(2)}s`);
+  paintCard(el, card);
+  return el;
+}
+
 /** Image + crop rectangle for canvas drawing (the win cascade). */
 export function cardImage(card) {
   return { image: imageCache.get(spriteFile(card)), crop: manifest.sprite.crop };

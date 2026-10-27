@@ -1,10 +1,13 @@
 import './style.css';
-import { GAMES, GAME_IDS, createGame } from './engine/games.js';
+import { GAMES, GAME_IDS, createGame, optionsFor } from './engine/games.js';
 import { loadArt } from './ui/art.js';
 import { Board } from './ui/board.js';
 import { startBackground } from './ui/background.js';
 import { sfx, setSound, unlockAudio } from './ui/audio.js';
 import { burst, shake, popup, bump, buzz, startCascade, stopCascade } from './ui/fx.js';
+import { Felt } from './ui/felt.js';
+import { createPoker } from './modes/poker.js';
+import { createBlackjack } from './modes/blackjack.js';
 
 const $ = (id) => document.getElementById(id);
 const BASE = import.meta.env.BASE_URL;
@@ -37,7 +40,7 @@ for (const key of ['save', 'stats']) {
   }
 }
 
-const settings = { game: 'klondike', drawCount: 1, suits: 1, sound: true, music: false, scares: true, ...store.get('settings', {}) };
+const settings = { game: 'klondike', sound: true, music: false, scares: true, ...store.get('settings', {}) };
 if (!GAMES[settings.game]) settings.game = 'klondike';
 
 const freshStats = () => ({ played: 0, won: 0, bestTime: null, bestScore: 0 });
@@ -60,6 +63,8 @@ let lastShownScore = 0;
 let idleTimer = null;
 let scareTimer = null;
 let busyUntil = 0;
+let table = null; // the running poker/blackjack controller
+const modes = {};
 
 const WHISPERS = {
   idle: ['the cards are getting cold', 'something shuffles behind you', 'it is waiting for you to move', 'do not look at the stock'],
@@ -80,8 +85,24 @@ async function boot() {
   await loadArt();
 
   board = new Board($('board'), { draw, move, autoMove, grab: () => sfx.pick(), drop: () => { sfx.nope(); buzz(30); } });
+  const tableCtx = {
+    felt: new Felt($('felt')),
+    actions: $('table-actions'),
+    store,
+    sfx,
+    fx: { burst, shake, popup, buzz },
+    bg,
+    whisper,
+    bump,
+    hud: setTableHud,
+    finish: showResult,
+  };
+  modes.poker = createPoker(tableCtx);
+  modes.blackjack = createBlackjack(tableCtx);
+  syncMenu();
   window.addEventListener('resize', () => {
-    if (!game) return;
+    if (table) table.layout();
+    if (!game || $('game-screen').hidden) return;
     board.layout();
     board.render({ instant: true });
   });
@@ -89,13 +110,6 @@ async function boot() {
   $('play-button').addEventListener('click', () => newGame());
   $('daily-button').addEventListener('click', () => newGame({ daily: true }));
   $('continue-button').addEventListener('click', continueGame);
-  $('variant-toggle').addEventListener('click', () => {
-    const { variant } = GAMES[settings.game];
-    if (!variant) return;
-    const i = variant.values.indexOf(settings[variant.key]);
-    settings[variant.key] = variant.values[(i + 1) % variant.values.length];
-    saveSettings();
-  });
   $('sound-toggle').addEventListener('click', () => {
     settings.sound = !settings.sound;
     setSound(settings.sound);
@@ -115,6 +129,7 @@ async function boot() {
   $('hint-button').addEventListener('click', hint);
   $('new-button').addEventListener('click', () => newGame());
   $('menu-button').addEventListener('click', showMenu);
+  $('table-menu-button').addEventListener('click', showMenu);
   $('win-again').addEventListener('click', () => newGame());
   $('win-menu').addEventListener('click', showMenu);
   document.addEventListener('pointerdown', unlockAudio, { once: true });
@@ -132,7 +147,7 @@ function buildGamePicker() {
     btn.className = 'btn btn--small';
     btn.setAttribute('role', 'radio');
     btn.dataset.game = id;
-    btn.textContent = GAMES[id].Game.title;
+    btn.textContent = GAMES[id].title;
     btn.addEventListener('click', () => {
       if (settings.game === id) return;
       settings.game = id;
@@ -149,12 +164,25 @@ function saveSettings() {
 }
 
 function syncMenu() {
-  const { variant, blurb } = GAMES[settings.game];
+  const { variants, blurb, family } = GAMES[settings.game];
   for (const btn of $('game-picker').children) btn.setAttribute('aria-checked', String(btn.dataset.game === settings.game));
   $('game-blurb').textContent = blurb;
-  const toggle = $('variant-toggle');
-  toggle.hidden = !variant;
-  if (variant) toggle.textContent = variant.label(settings[variant.key] ?? variant.values[0]);
+  const sub = document.querySelector('.title--sub');
+  sub.textContent = family;
+  sub.dataset.text = family;
+  const options = optionsFor(settings.game, settings);
+  $('variant-toggles').replaceChildren(...variants.map((v) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn--small';
+    btn.textContent = v.label(options[v.key]);
+    btn.addEventListener('click', () => {
+      settings[v.key] = v.values[(v.values.indexOf(options[v.key]) + 1) % v.values.length];
+      sfx.pick();
+      saveSettings();
+    });
+    return btn;
+  }));
   $('sound-toggle').textContent = `Sound: ${settings.sound ? 'on' : 'off'}`;
   $('sound-toggle').setAttribute('aria-pressed', String(settings.sound));
   $('music-toggle').textContent = `Music: ${settings.music ? 'on' : 'off'}`;
@@ -162,10 +190,18 @@ function syncMenu() {
   $('scare-toggle').textContent = `Scares: ${settings.scares ? 'on' : 'off'}`;
   $('scare-toggle').setAttribute('aria-pressed', String(settings.scares));
   $('continue-button').hidden = !store.get(`save:${settings.game}`, null);
-  const s = statsFor(settings.game);
-  $('menu-stats').textContent = s.played
-    ? `${s.won} escaped of ${s.played}${s.bestTime ? ` · fastest ${formatTime(s.bestTime)}` : ''}`
-    : '';
+  $('menu-stats').textContent = menuStats(settings.game);
+}
+
+function menuStats(id) {
+  if (id === 'blackjack') {
+    const s = modes.blackjack?.stats();
+    return s ? `${modes.blackjack.bank()} souls in the bank${s.played ? ` · best ${s.best}` : ''}` : '';
+  }
+  const s = statsFor(id);
+  if (!s.played) return '';
+  if (id === 'holdem') return `${s.won} tables taken of ${s.played}`;
+  return `${s.won} escaped of ${s.played}${s.bestTime ? ` · fastest ${formatTime(s.bestTime)}` : ''}`;
 }
 
 function syncMusic() {
@@ -188,19 +224,30 @@ function animatePumpkin() {
 
 function showMenu() {
   saveGame();
+  stopTable();
   stopCascade();
   $('win').hidden = true;
   $('game-screen').hidden = true;
+  $('table-screen').hidden = true;
+  $('stage').dataset.screen = 'menu';
   $('menu-screen').hidden = false;
   clearTimeout(scareTimer);
   clearTimeout(idleTimer);
   syncMenu();
 }
 
+function stopTable() {
+  table?.stop();
+  table = null;
+}
+
 function showGame() {
+  stopTable();
   $('menu-screen').hidden = true;
   $('win').hidden = true;
+  $('table-screen').hidden = true;
   $('game-screen').hidden = false;
+  $('stage').dataset.screen = 'solitaire';
   $('board').style.opacity = '';
   syncMusic();
   board.layout();
@@ -209,20 +256,49 @@ function showGame() {
 /** New game of whatever is picked on the menu (or the one being played, from in-game). */
 function newGame({ daily = false } = {}) {
   stopCascade();
-  const id = $('menu-screen').hidden && game ? gameId : settings.game;
+  const id = $('menu-screen').hidden && gameId ? gameId : settings.game;
   const today = new Date();
   const seed = daily
     ? today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
     : Math.floor(Math.random() * 2 ** 31);
+  if (GAMES[id].mode) {
+    startTable(id, { seed, ...optionsFor(id, settings) });
+    if (daily) whisper('today\'s haunting is the same for everyone');
+    return;
+  }
   start(id, createGame(id, seed, settings), 0);
   stats.played += 1;
   store.set(`stats:${gameId}`, stats);
   whisper(daily ? 'today\'s haunting is the same for everyone' : pick(GAMES[id].whispers));
 }
 
+function startTable(id, options) {
+  const fresh = !options.resume;
+  saveGame();
+  game = null;
+  gameId = id;
+  $('menu-screen').hidden = true;
+  $('game-screen').hidden = true;
+  $('win').hidden = true;
+  $('table-screen').hidden = false;
+  $('stage').dataset.screen = 'table';
+  syncMusic();
+  stopTable();
+  table = modes[GAMES[id].mode];
+  table.start(options);
+  if (fresh && id !== 'blackjack') {
+    const s = statsFor(id);
+    s.played += 1;
+    store.set(`stats:${id}`, s);
+  }
+  armIdle();
+  armScare();
+}
+
 function continueGame() {
   const save = store.get(`save:${settings.game}`, null);
   if (!save) return newGame();
+  if (GAMES[settings.game].mode) return startTable(settings.game, { resume: save });
   start(settings.game, GAMES[settings.game].Game.fromJSON(save.game), save.elapsed ?? 0, { deal: false });
 }
 
@@ -476,10 +552,12 @@ function winSequence() {
   buzz([60, 40, 60, 40, 200]);
   burst(window.innerWidth / 2, window.innerHeight / 2, { palette: 'ember', count: 120, speed: 12 });
 
-  $('win-score').textContent = game.score;
-  $('win-moves').textContent = game.moves;
-  $('win-time').textContent = formatTime(elapsed);
-  $('win-count').textContent = stats.won;
+  const result = {
+    won: true,
+    eyebrow: 'every soul laid to rest',
+    title: 'You Escaped',
+    stats: [['Souls', game.score], ['Moves', game.moves], ['Time', formatTime(elapsed)], ['Wins', stats.won]],
+  };
 
   setTimeout(() => {
     const rect = $('board').getBoundingClientRect();
@@ -488,10 +566,49 @@ function winSequence() {
       return { x: rect.left + pos.x, y: rect.top + pos.y, cards: game.pile(id) };
     });
     $('board').style.opacity = '0.12';
-    startCascade(stacks, board.cardW, board.cardH, () => {
-      $('win').hidden = false;
-    });
+    startCascade(stacks, board.cardW, board.cardH, () => showResult(result, { quiet: true }));
   }, 900);
+}
+
+/** The end-of-game dialog, for any game. */
+function showResult({ won, eyebrow, title, stats: rows }, { quiet = false } = {}) {
+  $('win-eyebrow').textContent = eyebrow;
+  $('win-title').textContent = title;
+  $('win-stats').replaceChildren(...rows.map(([label, value]) => {
+    const cell = document.createElement('div');
+    cell.innerHTML = '<dt></dt><dd></dd>';
+    cell.querySelector('dt').textContent = label;
+    cell.querySelector('dd').textContent = value;
+    return cell;
+  }));
+  $('win-again').textContent = GAMES[gameId].mode === 'poker' ? 'Sit down again' : 'Deal again';
+  $('win').dataset.won = String(won);
+  if (!quiet) {
+    if (won) {
+      sfx.win();
+      shake(0.8);
+      bg.pulse(3);
+      buzz([60, 40, 60, 40, 200]);
+      burst(window.innerWidth / 2, window.innerHeight / 2, { palette: 'ember', count: 120, speed: 12 });
+      const s = statsFor(gameId);
+      s.won += 1;
+      store.set(`stats:${gameId}`, s);
+    } else {
+      sfx.sting();
+      shake(0.6);
+      buzz([80, 40, 200]);
+      burst(window.innerWidth / 2, window.innerHeight / 2, { palette: 'blood', count: 100, speed: 10 });
+    }
+  }
+  setTimeout(() => { $('win').hidden = false; }, quiet ? 0 : 900);
+}
+
+function setTableHud(panels) {
+  panels.forEach(([label, value], i) => {
+    $(`table-label-${i}`).textContent = label;
+    const el = $(`table-value-${i}`);
+    if (el.textContent !== String(value)) el.textContent = value;
+  });
 }
 
 // ---- HUD, timer, save ---------------------------------------------------------
@@ -538,7 +655,7 @@ function whisper(text) {
 function armIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    if (won || $('game-screen').hidden) return;
+    if (won || !$('menu-screen').hidden) return;
     whisper(pick(WHISPERS.idle));
     sfx.whisper();
     armIdle();
@@ -548,7 +665,7 @@ function armIdle() {
 function armScare() {
   clearTimeout(scareTimer);
   scareTimer = setTimeout(() => {
-    if (settings.scares && !won && !document.hidden && !$('game-screen').hidden) scare();
+    if (settings.scares && !won && !document.hidden && $('menu-screen').hidden) scare();
     armScare();
   }, 50000 + Math.random() * 70000);
 }
@@ -572,8 +689,13 @@ function scare() {
 }
 
 function onKey(e) {
-  if (!game || $('game-screen').hidden) return;
   const key = e.key.toLowerCase();
+  if (table && !$('table-screen').hidden) {
+    if (key === 'escape') showMenu();
+    else if (table.key(key)) e.preventDefault();
+    return;
+  }
+  if (!game || $('game-screen').hidden) return;
   if (key === 'z') { e.preventDefault(); undo(); }
   else if (key === 'h') hint();
   else if (key === ' ' || key === 'd') { e.preventDefault(); draw(); }
@@ -583,7 +705,7 @@ function onKey(e) {
 
 // Dev-only handle for poking at the game from the console.
 if (import.meta.env.DEV) {
-  window.__solitaire = { get game() { return game; }, board: () => board, start, afterMove, createGame };
+  window.__solitaire = { get game() { return game; }, board: () => board, start, afterMove, createGame, get table() { return table; } };
 }
 
 boot();

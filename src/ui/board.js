@@ -1,4 +1,4 @@
-import { paintCard, crop } from './art.js';
+import { cardElement, crop } from './art.js';
 
 // Renders any solitaire as absolutely positioned card elements and turns
 // pointer input into intents (draw / move / auto-move). Where piles sit comes
@@ -66,12 +66,7 @@ export class Board {
   }
 
   createCard(card) {
-    const el = document.createElement('div');
-    el.className = 'card';
-    el.dataset.id = card.id;
-    el.innerHTML = '<div class="card-tilt"><div class="card-sway"><div class="card-flip"><div class="card-face"></div><div class="card-back"></div></div></div></div>';
-    el.style.setProperty('--sway-delay', `${(-Math.random() * 3.4).toFixed(2)}s`);
-    paintCard(el, card);
+    const el = cardElement(card);
     el.addEventListener('pointerdown', (e) => this.onPointerDown(e, card.id));
     el.addEventListener('pointermove', (e) => this.onHover(e, el));
     this.root.append(el);

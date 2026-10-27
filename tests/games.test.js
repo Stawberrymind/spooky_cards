@@ -18,12 +18,15 @@ function cleared(Game, opts) {
 
 // ---- every game -------------------------------------------------------------
 
-for (const id of GAME_IDS) {
-  const variants = GAMES[id].variant?.values ?? [undefined];
+const SOLITAIRES = GAME_IDS.filter((id) => GAMES[id].Game);
+
+for (const id of SOLITAIRES) {
+  const variant = GAMES[id].variants[0];
+  const variants = variant?.values ?? [undefined];
 
   test(`${id}: deals every card exactly once, and the layout covers every pile`, () => {
     for (const v of variants) {
-      const g = createGame(id, 42, v === undefined ? {} : { [GAMES[id].variant.key]: v });
+      const g = createGame(id, 42, v === undefined ? {} : { [variant.key]: v });
       const ids = allCards(g).map((c) => c.id);
       assert.equal(new Set(ids).size, ids.length);
       assert.equal(ids.length, id === 'spider' ? 104 : 52);
@@ -36,7 +39,7 @@ for (const id of GAME_IDS) {
     const rng = mulberry32(id.length * 977);
     for (let n = 0; n < 25; n++) {
       const v = variants[n % variants.length];
-      const g = createGame(id, Math.floor(rng() * 1e9), v === undefined ? {} : { [GAMES[id].variant.key]: v });
+      const g = createGame(id, Math.floor(rng() * 1e9), v === undefined ? {} : { [variant.key]: v });
       const total = allCards(g).length;
       for (let step = 0; step < 250; step++) {
         const hints = g.hints();

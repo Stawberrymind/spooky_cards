@@ -30,7 +30,7 @@
           <button id="play-button" class="btn btn--big btn--blood" type="button">New game</button>
           <button id="daily-button" class="btn btn--big btn--pumpkin" type="button">Daily haunt</button>
           <div class="menu-options">
-            <button id="variant-toggle" class="btn btn--small" type="button">Draw 1</button>
+            <span id="variant-toggles" class="variant-toggles"></span>
             <button id="sound-toggle" class="btn btn--small" type="button" aria-pressed="true">Sound: on</button>
             <button id="music-toggle" class="btn btn--small" type="button" aria-pressed="false">Music: off</button>
             <button id="scare-toggle" class="btn btn--small" type="button" aria-pressed="true">Scares: on</button>
@@ -63,8 +63,32 @@
           </div>
         </header>
         <div id="board" class="board" aria-label="Cards"></div>
-        <p id="whisper" class="whisper" aria-live="polite"></p>
       </section>
+
+      <!-- Poker and Blackjack -->
+      <section id="table-screen" class="game table-screen" aria-label="Card table" hidden>
+        <header class="hud">
+          <div class="hud-panel hud-panel--score">
+            <span id="table-label-0" class="hud-label">Souls</span>
+            <strong id="table-value-0" class="hud-value hud-value--big">0</strong>
+          </div>
+          <div class="hud-panel">
+            <span id="table-label-1" class="hud-label"></span>
+            <strong id="table-value-1" class="hud-value"></strong>
+          </div>
+          <div class="hud-panel">
+            <span id="table-label-2" class="hud-label"></span>
+            <strong id="table-value-2" class="hud-value"></strong>
+          </div>
+          <div class="hud-actions">
+            <button id="table-menu-button" class="btn" type="button" title="Menu (Esc)">Menu</button>
+          </div>
+        </header>
+        <div id="felt" class="felt" aria-label="Table"></div>
+        <div id="table-actions" class="table-actions"></div>
+      </section>
+
+      <p id="whisper" class="whisper" aria-live="polite"></p>
     </div>
 
     <canvas id="fx" class="fx" aria-hidden="true"></canvas>
@@ -74,14 +98,9 @@
 
     <div id="win" class="win" role="dialog" aria-modal="true" aria-labelledby="win-title" hidden>
       <div class="win-card">
-        <p class="win-eyebrow">every soul laid to rest</p>
+        <p id="win-eyebrow" class="win-eyebrow">every soul laid to rest</p>
         <h2 id="win-title" class="win-title">You Escaped</h2>
-        <dl class="win-stats">
-          <div><dt>Souls</dt><dd id="win-score">0</dd></div>
-          <div><dt>Moves</dt><dd id="win-moves">0</dd></div>
-          <div><dt>Time</dt><dd id="win-time">0:00</dd></div>
-          <div><dt>Wins</dt><dd id="win-count">0</dd></div>
-        </dl>
+        <dl id="win-stats" class="win-stats"></dl>
         <div class="win-buttons">
           <button id="win-again" class="btn btn--big btn--blood" type="button">Deal again</button>
           <button id="win-menu" class="btn" type="button">Menu</button>
