@@ -57,7 +57,7 @@ test('moving a run flips the newly exposed card and scores it', () => {
   g.piles.t1 = [card('T', 'clubs')];
   const res = g.move('t0', 1, 't1');
   assert.ok(res);
-  assert.equal(res.flipped.id, '4c');
+  assert.equal(res.flipped[0].id, '4c');
   assert.equal(g.pile('t1').length, 3);
   assert.equal(g.score, 5);
 });

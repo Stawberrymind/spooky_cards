@@ -23,12 +23,14 @@
           <h1 class="title title--sub" data-text="Solitaire">Solitaire</h1>
         </div>
         <img class="menu-pumpkin" id="menu-pumpkin" src="./pumpkin/sprite_0.png" alt="" aria-hidden="true">
+        <div class="game-picker" id="game-picker" role="radiogroup" aria-label="Game"></div>
+        <p id="game-blurb" class="game-blurb"></p>
         <div class="menu-buttons">
           <button id="continue-button" class="btn btn--big btn--ecto" type="button" hidden>Continue</button>
           <button id="play-button" class="btn btn--big btn--blood" type="button">New game</button>
           <button id="daily-button" class="btn btn--big btn--pumpkin" type="button">Daily haunt</button>
           <div class="menu-options">
-            <button id="draw-toggle" class="btn btn--small" type="button" aria-pressed="false">Draw 1</button>
+            <button id="variant-toggle" class="btn btn--small" type="button">Draw 1</button>
             <button id="sound-toggle" class="btn btn--small" type="button" aria-pressed="true">Sound: on</button>
             <button id="music-toggle" class="btn btn--small" type="button" aria-pressed="false">Music: off</button>
             <button id="scare-toggle" class="btn btn--small" type="button" aria-pressed="true">Scares: on</button>

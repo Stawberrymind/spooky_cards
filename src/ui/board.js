@@ -1,11 +1,13 @@
-import { TABLEAU_IDS, FOUNDATION_IDS } from '../engine/klondike.js';
 import { paintCard, crop } from './art.js';
 
-// Renders a Klondike game as 52 absolutely positioned card elements and turns
-// pointer input into intents (draw / move / auto-move). Cards keep their DOM
-// node for the whole game so CSS transitions can carry them between piles.
+// Renders any solitaire as absolutely positioned card elements and turns
+// pointer input into intents (draw / move / auto-move). Where piles sit comes
+// from game.layout() (see engine/base.js). Cards keep their DOM node for the
+// whole game so CSS transitions can carry them between piles.
 
-const FOUNDATION_HINT = ['♥', '♦', '♣', '♠'];
+const Z_PILE = 120; // stacking room per pile
+const Z_FLYING = 10000;
+const Z_DRAGGING = 20000;
 
 export class Board {
   constructor(root, handlers) {
@@ -17,20 +19,7 @@ export class Board {
     this.pileOf = new Map();
     this.drag = null;
     this.hoverEl = null;
-
-    for (const id of ['stock', 'waste', ...FOUNDATION_IDS, ...TABLEAU_IDS]) {
-      const slot = document.createElement('div');
-      slot.className = `slot slot--${id === 'stock' ? 'stock' : id[0] === 'f' ? 'foundation' : id}`;
-      slot.dataset.pile = id;
-      if (id.startsWith('f')) slot.textContent = FOUNDATION_HINT[Number(id[1])];
-      if (id === 'stock') slot.textContent = '↻';
-      this.root.append(slot);
-      this.slots[id] = slot;
-    }
-    this.slots.stock.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.handlers.draw();
-    });
+    this.key = null;
 
     this.onPointerMove = this.onPointerMove.bind(this);
     this.onPointerUp = this.onPointerUp.bind(this);
@@ -40,11 +29,40 @@ export class Board {
     this.root.addEventListener('pointerleave', () => this.clearHover());
   }
 
+  /** Point the board at a game. A different kind of game rebuilds the table. */
   setGame(game) {
     this.game = game;
-    for (const pile of Object.values(game.piles)) {
-      for (const card of pile) if (!this.cards.has(card.id)) this.cards.set(card.id, this.createCard(card));
+    this.spec = game.layout();
+    this.order = Object.keys(this.spec.piles);
+    const ids = Object.values(game.piles).flat().map((c) => c.id).sort();
+    const key = `${game.constructor.id}|${this.order.join()}|${ids.join()}`;
+    if (key !== this.key) {
+      this.key = key;
+      this.drag = null;
+      this.root.replaceChildren();
+      this.cards.clear();
+      this.slots = {};
+      this.positions.clear();
+      this.pileOf.clear();
+      for (const [id, s] of Object.entries(this.spec.piles)) if (s.slot) this.createSlot(id, s);
+      for (const pile of Object.values(game.piles)) for (const card of pile) this.cards.set(card.id, this.createCard(card));
     }
+    this.root.dataset.game = game.constructor.id;
+  }
+
+  createSlot(id, spec) {
+    const slot = document.createElement('div');
+    slot.className = `slot slot--${spec.slot}`;
+    slot.dataset.pile = id;
+    slot.textContent = spec.label ?? (spec.slot === 'stock' ? '↻' : '');
+    if (spec.slot === 'stock') {
+      slot.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.handlers.draw();
+      });
+    }
+    this.root.append(slot);
+    this.slots[id] = slot;
   }
 
   createCard(card) {
@@ -65,20 +83,20 @@ export class Board {
   layout() {
     const rect = this.root.getBoundingClientRect();
     const { width: cw, height: ch } = crop();
+    const { cols, rows } = this.spec;
     // Phones get tighter gutters so the cards can be bigger.
     const narrow = rect.width < 600;
     const pad = narrow ? 6 : 16;
     const gapArt = narrow ? 1 : 2;
-    // 7 columns of card art plus 6 gaps.
-    let px = (Math.min(rect.width, 1100) - pad * 2) / (7 * cw + 6 * gapArt);
-    // Keep at least ~3.2 card heights visible vertically for the opening deal.
-    px = Math.min(px, (rect.height - 24) / (ch * 3.4));
-    px = px >= 6 ? Math.floor(px) : Math.max(3, Math.floor(px * 2) / 2);
+    let px = (Math.min(rect.width, 160 * cols) - pad * 2) / (cols * cw + (cols - 1) * gapArt);
+    // Fit the game's height too (tableau games need room to fan down).
+    px = Math.min(px, (rect.height - 24) / (ch * rows));
+    px = px >= 6 ? Math.floor(px) : Math.max(2.5, Math.floor(px * 2) / 2);
     this.px = px;
     this.cardW = cw * px;
     this.cardH = ch * px;
     this.gap = gapArt * px;
-    const boardW = 7 * this.cardW + 6 * this.gap;
+    const boardW = cols * this.cardW + (cols - 1) * this.gap;
     this.left = Math.round((rect.width - boardW) / 2);
     this.top = Math.round(px * 1.5);
     this.height = rect.height;
@@ -87,48 +105,47 @@ export class Board {
     this.root.style.setProperty('--card-w', `${this.cardW}px`);
     this.root.style.setProperty('--card-h', `${this.cardH}px`);
 
-    const place = (id, x, y) => {
-      const s = this.slots[id];
-      s.style.width = `${this.cardW}px`;
-      s.style.height = `${this.cardH}px`;
-      s.style.transform = `translate(${x}px, ${y}px)`;
-    };
-    place('stock', this.colX(0), this.top);
-    place('waste', this.colX(1), this.top);
-    FOUNDATION_IDS.forEach((id, i) => place(id, this.colX(3 + i), this.top));
-    TABLEAU_IDS.forEach((id, i) => place(id, this.colX(i), this.tableauY()));
+    for (const [id, slot] of Object.entries(this.slots)) {
+      const { x, y } = this.slotPos(id);
+      slot.style.width = `${this.cardW}px`;
+      slot.style.height = `${this.cardH}px`;
+      slot.style.transform = `translate(${x}px, ${y}px)`;
+    }
   }
 
-  colX(i) {
-    return this.left + i * (this.cardW + this.gap);
+  colX(x) {
+    return this.left + x * (this.cardW + this.gap);
   }
 
-  tableauY() {
-    return this.top + this.cardH + this.gap * 2;
+  rowY(y) {
+    return this.top + y * this.cardH;
+  }
+
+  /** Top-left of a pile's empty spot. */
+  slotPos(id) {
+    const s = this.spec.piles[id];
+    return { x: this.colX(s.x), y: this.rowY(s.y) };
   }
 
   /** Screen-space positions for every card in a pile. */
   pilePositions(id) {
     const pile = this.game.pile(id);
-    if (id === 'stock') {
+    const spec = this.spec.piles[id];
+    const { x: x0, y: y0 } = this.slotPos(id);
+    if (spec.fan === 'deck') {
       // A few pixels of thickness so the deck looks like a deck.
       return pile.map((_, i) => {
         const step = Math.min(3, Math.floor(i / 8)) * this.px * 0.3;
-        return { x: this.colX(0) - step, y: this.top - step };
+        return { x: x0 - step, y: y0 - step };
       });
     }
-    if (id === 'waste') {
-      const fan = this.game.drawCount === 3 ? 3 : 1;
-      const firstFanned = Math.max(0, pile.length - fan);
-      return pile.map((_, i) => ({ x: this.colX(1) + Math.max(0, i - firstFanned) * this.cardW * 0.28, y: this.top }));
+    if (spec.fan === 'waste') {
+      const firstFanned = Math.max(0, pile.length - (spec.fanCount ?? 1));
+      return pile.map((_, i) => ({ x: x0 + Math.max(0, i - firstFanned) * this.cardW * 0.28, y: y0 }));
     }
-    if (id.startsWith('f')) {
-      const col = 3 + Number(id[1]);
-      return pile.map(() => ({ x: this.colX(col), y: this.top }));
-    }
+    if (spec.fan === 'stack') return pile.map(() => ({ x: x0, y: y0 }));
+
     // Tableau: fan down, squeezing long columns so they stay on screen.
-    const col = Number(id[1]);
-    const y0 = this.tableauY();
     const room = Math.max(this.cardH, this.height - y0 - this.cardH - this.px * 6);
     let down = this.cardH * 0.16;
     let up = this.cardH * 0.27;
@@ -142,13 +159,25 @@ export class Board {
     }
     let y = y0;
     return pile.map((c) => {
-      const pos = { x: this.colX(col), y };
+      const pos = { x: x0, y };
       y += c.faceUp ? up : down;
       return pos;
     });
   }
 
   // ---- rendering -----------------------------------------------------------
+
+  /** Put every card face down on one spot, ready to be dealt out from there. */
+  gather(pos) {
+    for (const el of this.cards.values()) {
+      el.classList.add('is-instant');
+      el.classList.remove('face-up');
+      el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+      el.style.zIndex = 1;
+    }
+    for (const id of this.cards.keys()) this.pileOf.set(id, '__deal');
+    requestAnimationFrame(() => this.cards.forEach((el) => el.classList.remove('is-instant')));
+  }
 
   /**
    * Sync every card to the game state.
@@ -157,8 +186,7 @@ export class Board {
    */
   render(opts = {}) {
     const { delays = new Map(), instant = false } = opts;
-    const zBase = { stock: 0, waste: 100, f0: 200, f1: 200, f2: 200, f3: 200 };
-    for (const id of Object.keys(this.game.piles)) {
+    this.order.forEach((id, pileIndex) => {
       const positions = this.pilePositions(id);
       this.game.pile(id).forEach((card, i) => {
         const el = this.cards.get(card.id);
@@ -174,10 +202,10 @@ export class Board {
         el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
         el.classList.toggle('face-up', card.faceUp);
 
-        const z = (zBase[id] ?? 300 + TABLEAU_IDS.indexOf(id) * 40) + i;
+        const z = 10 + pileIndex * Z_PILE + i;
         if (moved && !instant) {
           // Fly above everything, then settle into the pile's stacking order.
-          el.style.zIndex = 2000 + i;
+          el.style.zIndex = Z_FLYING + i;
           el.classList.add('is-flying');
           clearTimeout(el._settle);
           el._settle = setTimeout(() => {
@@ -190,18 +218,16 @@ export class Board {
         this.positions.set(card.id, pos);
         this.pileOf.set(card.id, id);
       });
-    }
+    });
     if (instant) requestAnimationFrame(() => this.cards.forEach((el) => el.classList.remove('is-instant')));
   }
 
   /** Centre of a card or pile in viewport coordinates (for particles and popups). */
   centerOf(cardIdOrPile) {
-    const el = this.cards.get(cardIdOrPile) ?? this.slots[cardIdOrPile];
-    const pos = this.positions.get(cardIdOrPile);
     const rect = this.root.getBoundingClientRect();
-    if (pos) return { x: rect.left + pos.x + this.cardW / 2, y: rect.top + pos.y + this.cardH / 2 };
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const pos = this.positions.get(cardIdOrPile) ?? (this.spec.piles[cardIdOrPile] && this.slotPos(cardIdOrPile));
+    if (!pos) return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    return { x: rect.left + pos.x + this.cardW / 2, y: rect.top + pos.y + this.cardH / 2 };
   }
 
   flash(cardId, className, ms = 900) {
@@ -265,7 +291,7 @@ export class Board {
       d.ids.forEach((id, i) => {
         const el = this.cards.get(id);
         el.classList.add('is-dragging');
-        el.style.zIndex = 5000 + i;
+        el.style.zIndex = Z_DRAGGING + i;
       });
       this.handlers.grab?.(d.ids.length);
       this.tick();
@@ -274,8 +300,8 @@ export class Board {
     d.targetY = d.origin.y + dy;
     const target = this.dropTarget(d);
     if (target !== d.target) {
-      if (d.target) this.slots[d.target].classList.remove('is-target');
-      if (target) this.slots[target].classList.add('is-target');
+      this.slots[d.target]?.classList.remove('is-target');
+      this.slots[target]?.classList.add('is-target');
       d.target = target;
     }
   }
@@ -307,8 +333,8 @@ export class Board {
     const cy = d.targetY + this.cardH / 2;
     let best = null;
     let bestDist = Infinity;
-    for (const id of [...FOUNDATION_IDS, ...TABLEAU_IDS]) {
-      if (id === d.fromId) continue;
+    for (const id of this.order) {
+      if (id === d.fromId || id === 'stock') continue;
       if (!this.game.canMove(d.fromId, d.index, id)) continue;
       const pile = this.game.pile(id);
       const pos = pile.length ? this.positions.get(pile[pile.length - 1].id) : this.slotPos(id);
@@ -321,16 +347,11 @@ export class Board {
     return best;
   }
 
-  slotPos(id) {
-    if (id.startsWith('f')) return { x: this.colX(3 + Number(id[1])), y: this.top };
-    return { x: this.colX(Number(id[1])), y: this.tableauY() };
-  }
-
   onPointerUp() {
     const d = this.drag;
     if (!d) return;
     this.drag = null;
-    if (d.target) this.slots[d.target].classList.remove('is-target');
+    this.slots[d.target]?.classList.remove('is-target');
     d.ids.forEach((id) => {
       const el = this.cards.get(id);
       el.classList.remove('is-dragging');
@@ -372,5 +393,4 @@ export class Board {
     tilt.style.removeProperty('--scale');
     this.hoverEl = null;
   }
-
 }

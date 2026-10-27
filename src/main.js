@@ -1,5 +1,5 @@
 import './style.css';
-import { Klondike, TABLEAU_IDS, FOUNDATION_IDS } from './engine/klondike.js';
+import { GAMES, GAME_IDS, createGame } from './engine/games.js';
 import { loadArt } from './ui/art.js';
 import { Board } from './ui/board.js';
 import { startBackground } from './ui/background.js';
@@ -28,12 +28,26 @@ const store = {
   },
 };
 
-const settings = { drawCount: 1, sound: true, music: false, scares: true, ...store.get('settings', {}) };
-const stats = { played: 0, won: 0, bestTime: null, bestScore: 0, ...store.get('stats', {}) };
+// Before there were several games, Klondike's save and stats had no game in the key.
+for (const key of ['save', 'stats']) {
+  const old = store.get(key, null);
+  if (old) {
+    if (!store.get(`${key}:klondike`, null)) store.set(`${key}:klondike`, old);
+    store.set(key, null);
+  }
+}
+
+const settings = { game: 'klondike', drawCount: 1, suits: 1, sound: true, music: false, scares: true, ...store.get('settings', {}) };
+if (!GAMES[settings.game]) settings.game = 'klondike';
+
+const freshStats = () => ({ played: 0, won: 0, bestTime: null, bestScore: 0 });
+const statsFor = (id) => ({ ...freshStats(), ...store.get(`stats:${id}`, {}) });
 
 // ---- app state --------------------------------------------------------------
 
 let game = null;
+let gameId = settings.game;
+let stats = statsFor(gameId);
 let board = null;
 let bg = null;
 let elapsed = 0;
@@ -52,7 +66,6 @@ const WHISPERS = {
   stuck: ['the dead are waiting', 'there is no way out of this one', 'deal again... if you dare'],
   undo: ['there is no going back', 'it remembers what you did', 'time does not run backwards here'],
   scare: ['did you hear that', 'it is closer now', 'look behind you', 'we see you'],
-  start: ['the dead are dealt', 'seven graves, fifty-two souls', 'lay them to rest'],
 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -62,6 +75,7 @@ async function boot() {
   setSound(settings.sound);
   bg = startBackground($('bg'));
   animatePumpkin();
+  buildGamePicker();
   syncMenu();
   await loadArt();
 
@@ -75,8 +89,11 @@ async function boot() {
   $('play-button').addEventListener('click', () => newGame());
   $('daily-button').addEventListener('click', () => newGame({ daily: true }));
   $('continue-button').addEventListener('click', continueGame);
-  $('draw-toggle').addEventListener('click', () => {
-    settings.drawCount = settings.drawCount === 1 ? 3 : 1;
+  $('variant-toggle').addEventListener('click', () => {
+    const { variant } = GAMES[settings.game];
+    if (!variant) return;
+    const i = variant.values.indexOf(settings[variant.key]);
+    settings[variant.key] = variant.values[(i + 1) % variant.values.length];
     saveSettings();
   });
   $('sound-toggle').addEventListener('click', () => {
@@ -107,24 +124,47 @@ async function boot() {
   setInterval(tickTimer, 1000);
 }
 
+function buildGamePicker() {
+  const picker = $('game-picker');
+  for (const id of GAME_IDS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn--small';
+    btn.setAttribute('role', 'radio');
+    btn.dataset.game = id;
+    btn.textContent = GAMES[id].Game.title;
+    btn.addEventListener('click', () => {
+      if (settings.game === id) return;
+      settings.game = id;
+      sfx.flip();
+      saveSettings();
+    });
+    picker.append(btn);
+  }
+}
+
 function saveSettings() {
   store.set('settings', settings);
   syncMenu();
 }
 
 function syncMenu() {
-  $('draw-toggle').textContent = `Draw ${settings.drawCount}`;
-  $('draw-toggle').setAttribute('aria-pressed', String(settings.drawCount === 3));
+  const { variant, blurb } = GAMES[settings.game];
+  for (const btn of $('game-picker').children) btn.setAttribute('aria-checked', String(btn.dataset.game === settings.game));
+  $('game-blurb').textContent = blurb;
+  const toggle = $('variant-toggle');
+  toggle.hidden = !variant;
+  if (variant) toggle.textContent = variant.label(settings[variant.key] ?? variant.values[0]);
   $('sound-toggle').textContent = `Sound: ${settings.sound ? 'on' : 'off'}`;
   $('sound-toggle').setAttribute('aria-pressed', String(settings.sound));
   $('music-toggle').textContent = `Music: ${settings.music ? 'on' : 'off'}`;
   $('music-toggle').setAttribute('aria-pressed', String(settings.music));
   $('scare-toggle').textContent = `Scares: ${settings.scares ? 'on' : 'off'}`;
   $('scare-toggle').setAttribute('aria-pressed', String(settings.scares));
-  const save = store.get('save', null);
-  $('continue-button').hidden = !save;
-  $('menu-stats').textContent = stats.played
-    ? `${stats.won} escaped of ${stats.played}${stats.bestTime ? ` · fastest ${formatTime(stats.bestTime)}` : ''}`
+  $('continue-button').hidden = !store.get(`save:${settings.game}`, null);
+  const s = statsFor(settings.game);
+  $('menu-stats').textContent = s.played
+    ? `${s.won} escaped of ${s.played}${s.bestTime ? ` · fastest ${formatTime(s.bestTime)}` : ''}`
     : '';
 }
 
@@ -166,25 +206,30 @@ function showGame() {
   board.layout();
 }
 
+/** New game of whatever is picked on the menu (or the one being played, from in-game). */
 function newGame({ daily = false } = {}) {
   stopCascade();
+  const id = $('menu-screen').hidden && game ? gameId : settings.game;
   const today = new Date();
   const seed = daily
     ? today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
     : Math.floor(Math.random() * 2 ** 31);
-  start(new Klondike({ seed, drawCount: settings.drawCount }), 0);
+  start(id, createGame(id, seed, settings), 0);
   stats.played += 1;
-  store.set('stats', stats);
-  whisper(daily ? 'today\'s haunting is the same for everyone' : pick(WHISPERS.start));
+  store.set(`stats:${gameId}`, stats);
+  whisper(daily ? 'today\'s haunting is the same for everyone' : pick(GAMES[id].whispers));
 }
 
 function continueGame() {
-  const save = store.get('save', null);
+  const save = store.get(`save:${settings.game}`, null);
   if (!save) return newGame();
-  start(Klondike.fromJSON(save.game), save.elapsed ?? 0, { deal: false });
+  start(settings.game, GAMES[settings.game].Game.fromJSON(save.game), save.elapsed ?? 0, { deal: false });
 }
 
-function start(nextGame, startElapsed, { deal = true } = {}) {
+function start(id, nextGame, startElapsed, { deal = true } = {}) {
+  if (game && !won) saveGame();
+  gameId = id;
+  stats = statsFor(id);
   game = nextGame;
   elapsed = startElapsed;
   timerStarted = startElapsed > 0;
@@ -192,8 +237,9 @@ function start(nextGame, startElapsed, { deal = true } = {}) {
   combo = 0;
   autoCompleting = false;
   lastShownScore = game.score;
-  showGame();
   board.setGame(game);
+  showGame();
+  $('game-screen').dataset.game = id;
   if (deal) dealAnimation();
   else board.render({ instant: true });
   updateHud(false);
@@ -203,28 +249,21 @@ function start(nextGame, startElapsed, { deal = true } = {}) {
 }
 
 function dealAnimation() {
-  // Everything starts face down on the stock, then flies out row by row.
-  for (const id of Object.keys(game.piles)) {
-    for (const card of game.pile(id)) board.pileOf.set(card.id, 'stock');
-  }
-  const stockOnly = { ...game.piles };
-  const real = game.piles;
-  game.piles = { ...Object.fromEntries(Object.keys(real).map((k) => [k, []])), stock: Object.values(stockOnly).flat().map((c) => ({ ...c, faceUp: false })) };
-  board.render({ instant: true });
-  game.piles = real;
+  // Everything starts face down in one heap (the stock, or just above the
+  // table when there isn't one), then flies out in the game's deal order.
+  const from = game.hasStock()
+    ? board.slotPos('stock')
+    : { x: board.left + ((board.spec.cols - 1) * (board.cardW + board.gap)) / 2, y: -board.cardH * 1.5 };
+  board.gather(from);
 
-  const delays = new Map();
-  let k = 0;
-  for (let row = 0; row < 7; row++) {
-    TABLEAU_IDS.forEach((id, col) => {
-      if (col >= row) delays.set(game.pile(id)[row].id, 120 + k++ * 45);
-    });
-  }
-  busyUntil = performance.now() + 120 + k * 45 + 300;
+  const order = game.dealOrder();
+  const step = Math.max(14, Math.min(45, 1300 / order.length));
+  const delays = new Map(order.map((c, k) => [c.id, 120 + k * step]));
+  busyUntil = performance.now() + 120 + order.length * step + 300;
   sfx.shuffle();
   requestAnimationFrame(() => requestAnimationFrame(() => {
     board.render({ delays });
-    for (let i = 0; i < k; i += 3) setTimeout(() => sfx.draw(), 120 + i * 45);
+    for (let k = 0; k < order.length; k += 3) setTimeout(() => sfx.draw(), 120 + k * step);
   }));
 }
 
@@ -235,20 +274,24 @@ function busy() {
 }
 
 function draw() {
-  if (busy()) return;
+  if (busy() || !game.hasStock()) return;
   if (!game.canDraw()) {
     sfx.nope();
+    if (game.pile('stock').length) whisper('fill every column before you deal');
     return;
   }
   const res = game.draw();
+  combo = 0;
   const delays = new Map(res.cards.map((c, i) => [c.id, i * 70]));
+  res.completed?.cards.forEach((c, i) => delays.set(c.id, 500 + i * 30));
   board.render({ delays });
   if (res.recycled) {
     sfx.shuffle();
-    if (game.drawCount === 1 && game.passes > 0) popup('-100', ...xy(board.centerOf('stock')), 'popup--pumpkin');
+    if (res.points < 0) popup(String(res.points), ...xy(board.centerOf('stock')), 'popup--pumpkin');
   } else {
     res.cards.forEach((_, i) => setTimeout(() => sfx.draw(), i * 70));
   }
+  if (res.completed) runLaidToRest(res.completed, 600);
   buzz(8);
   afterMove();
 }
@@ -258,6 +301,8 @@ function move(fromId, index, toId) {
   const res = game.move(fromId, index, toId);
   if (!res) return false;
   const delays = new Map(res.cards.map((c, i) => [c.id, i * 35]));
+  // Spider: the finished run lands, then peels off to its foundation.
+  res.completed?.cards.forEach((c, i) => delays.set(c.id, 380 + i * 30));
   board.render({ delays });
   celebrate(res, toId);
   afterMove();
@@ -274,41 +319,70 @@ function celebrate(res, toId) {
   const lead = res.cards[0];
   setTimeout(() => board.flash(lead.id, 'is-landed', 320), 260);
 
-  if (toId.startsWith('f')) {
-    combo += 1;
-    clearTimeout(comboTimer);
-    comboTimer = setTimeout(() => { combo = 0; }, 3500);
+  if (res.home) {
+    // TriPeaks keeps its own streak; elsewhere quick foundation moves chain up.
+    if (res.streak) combo = res.streak;
+    else {
+      combo += 1;
+      clearTimeout(comboTimer);
+      comboTimer = setTimeout(() => { combo = 0; }, 3500);
+    }
     const at = board.centerOf(toId);
+    const gained = res.points - res.flipped.length * (res.flipPoints ?? 0);
     sfx.foundation(combo);
     buzz(14);
     setTimeout(() => {
-      burst(at.x, at.y, { palette: 'ecto', count: 14 + combo * 4, speed: 5 + combo });
-      popup(combo > 1 ? `+10  x${combo}` : '+10', at.x, at.y - board.cardH * 0.6, 'popup--ecto');
+      burst(at.x, at.y, { palette: 'ecto', count: 14 + Math.min(combo, 12) * 4, speed: 5 + Math.min(combo, 8) });
+      popup(combo > 1 ? `+${gained}  x${combo}` : `+${gained}`, at.x, at.y - board.cardH * 0.6, 'popup--ecto');
     }, 200);
     if (combo >= 3) bg.pulse(0.6);
-    if (game.pile(toId).length === 13) {
+    if (toId.startsWith('f') && game.pile(toId).length === 13) {
+      setTimeout(() => suitFanfare(at, 'SUIT LAID TO REST'), 320);
+    }
+    if (res.peak && !game.isWon()) {
       setTimeout(() => {
         sfx.suitDone();
-        shake(0.55);
-        bg.pulse(2.5);
-        buzz([40, 50, 40]);
-        burst(at.x, at.y, { palette: 'blood', count: 60, speed: 9 });
-        popup('SUIT LAID TO REST', window.innerWidth / 2, window.innerHeight * 0.42, 'popup--huge');
-      }, 320);
+        shake(0.45);
+        bg.pulse(2);
+        buzz([30, 40, 30]);
+        popup('PEAK CLEARED', window.innerWidth / 2, window.innerHeight * 0.42, 'popup--huge');
+      }, 300);
     }
   } else {
     sfx.place();
     buzz(8);
   }
 
-  if (res.flipped) {
+  if (res.completed) runLaidToRest(res.completed, 420);
+
+  res.flipped.forEach((card, i) => {
     setTimeout(() => {
       sfx.flip();
-      const at = board.centerOf(res.flipped.id);
+      const at = board.centerOf(card.id);
       burst(at.x, at.y, { palette: 'ember', count: 10, speed: 4 });
-      popup('+5', at.x, at.y - board.cardH * 0.4, 'popup--pumpkin');
-    }, 300);
-  }
+      if (res.flipPoints) popup(`+${res.flipPoints}`, at.x, at.y - board.cardH * 0.4, 'popup--pumpkin');
+    }, 300 + i * 60);
+  });
+}
+
+function suitFanfare(at, text) {
+  sfx.suitDone();
+  shake(0.55);
+  bg.pulse(2.5);
+  buzz([40, 50, 40]);
+  burst(at.x, at.y, { palette: 'blood', count: 60, speed: 9 });
+  popup(text, window.innerWidth / 2, window.innerHeight * 0.42, 'popup--huge');
+}
+
+/** Spider: a finished K→A run has left the table. */
+function runLaidToRest(completed, delay) {
+  setTimeout(() => {
+    const at = board.centerOf(completed.toId);
+    suitFanfare(at, 'SUIT LAID TO REST');
+    popup('+100', at.x, at.y - board.cardH * 0.6, 'popup--ecto');
+    completed.flipped.forEach((card) => board.flash(card.id, 'is-landed', 320));
+    updateHud(true);
+  }, delay + 13 * 30);
 }
 
 function undo() {
@@ -391,8 +465,8 @@ function winSequence() {
   stats.won += 1;
   stats.bestTime = stats.bestTime ? Math.min(stats.bestTime, elapsed) : elapsed;
   stats.bestScore = Math.max(stats.bestScore, game.score);
-  store.set('stats', stats);
-  store.set('save', null);
+  store.set(`stats:${gameId}`, stats);
+  store.set(`save:${gameId}`, null);
   clearTimeout(scareTimer);
   clearTimeout(idleTimer);
 
@@ -409,11 +483,10 @@ function winSequence() {
 
   setTimeout(() => {
     const rect = $('board').getBoundingClientRect();
-    const stacks = FOUNDATION_IDS.map((id, i) => ({
-      x: rect.left + board.colX(3 + i),
-      y: rect.top + board.top,
-      cards: game.pile(id),
-    }));
+    const stacks = board.spec.cascade.map((id) => {
+      const pos = board.slotPos(id);
+      return { x: rect.left + pos.x, y: rect.top + pos.y, cards: game.pile(id) };
+    });
     $('board').style.opacity = '0.12';
     startCascade(stacks, board.cardW, board.cardH, () => {
       $('win').hidden = false;
@@ -447,7 +520,7 @@ function formatTime(s) {
 
 function saveGame() {
   if (!game || won) return;
-  store.set('save', { game: game.toJSON(), elapsed });
+  store.set(`save:${gameId}`, { game: game.toJSON(), elapsed });
 }
 
 const xy = (p) => [p.x, p.y];
@@ -510,7 +583,7 @@ function onKey(e) {
 
 // Dev-only handle for poking at the game from the console.
 if (import.meta.env.DEV) {
-  window.__solitaire = { get game() { return game; }, board: () => board, start, afterMove, Klondike };
+  window.__solitaire = { get game() { return game; }, board: () => board, start, afterMove, createGame };
 }
 
 boot();

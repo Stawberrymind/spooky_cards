@@ -175,6 +175,15 @@ button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
 .menu-buttons { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .menu-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
 .menu-stats { margin: 0; color: var(--ink-dim); font-size: 0.9rem; min-height: 1em; }
+.game-picker { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.game-picker .btn { min-width: 104px; }
+.game-picker .btn[aria-checked='true'] {
+  background: var(--bone);
+  color: #1a0408;
+  box-shadow: 0 4px 0 var(--blood), inset 0 0 0 2px var(--pumpkin);
+  transform: translateY(-2px) rotate(-2deg);
+}
+.game-blurb { margin: -6px 0 0; color: var(--ink-dim); font-size: 0.95rem; min-height: 1.2em; max-width: 34ch; }
 .tagline {
   margin: 0;
   color: var(--blood-hi);
@@ -398,6 +407,8 @@ button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
   .hud-value--big { font-size: 1.25rem; }
   .hud-actions .btn { padding: 7px 10px 9px; font-size: 0.85rem; }
   .btn--big { min-width: 200px; font-size: 1.15rem; }
+  .game-picker { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 280px); }
+  .game-picker .btn { min-width: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

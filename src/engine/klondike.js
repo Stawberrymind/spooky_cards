@@ -1,8 +1,7 @@
-import { fullDeck, shuffle, mulberry32, rankValue, isRed } from './cards.js';
+import { rankValue, isRed, fullDeck, shuffle, mulberry32 } from './cards.js';
+import { SolitaireBase, FOUNDATION_SUIT_HINT } from './base.js';
 
-// Pure Klondike solitaire. No DOM: the UI asks what's legal, calls move(),
-// and re-renders from state. Piles are addressed by id:
-//   'stock', 'waste', 'f0'..'f3' (foundations), 't0'..'t6' (tableau).
+// Klondike. Piles: 'stock', 'waste', 'f0'..'f3' (foundations), 't0'..'t6' (tableau).
 
 export const TABLEAU_IDS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6'];
 export const FOUNDATION_IDS = ['f0', 'f1', 'f2', 'f3'];
@@ -10,14 +9,14 @@ export const FOUNDATION_IDS = ['f0', 'f1', 'f2', 'f3'];
 // Classic Windows scoring.
 const POINTS = { wasteToTableau: 5, toFoundation: 10, flip: 5, foundationToTableau: -15, recycle: -100 };
 
-export class Klondike {
+export class Klondike extends SolitaireBase {
+  static id = 'klondike';
+  static title = 'Klondike';
+
   constructor({ seed = Date.now(), drawCount = 1 } = {}) {
-    this.seed = seed >>> 0;
+    super({ seed });
     this.drawCount = drawCount;
-    this.score = 0;
-    this.moves = 0;
     this.passes = 0;
-    this.history = [];
 
     const deck = shuffle(fullDeck(), mulberry32(this.seed)).map((c) => ({ ...c, faceUp: false }));
     this.piles = { stock: [], waste: [] };
@@ -30,22 +29,36 @@ export class Klondike {
     this.piles.stock = deck;
   }
 
-  pile(id) {
-    return this.piles[id];
+  layout() {
+    const piles = {
+      stock: { x: 0, y: 0, fan: 'deck', slot: 'stock' },
+      waste: { x: 1, y: 0, fan: 'waste', slot: null, fanCount: this.drawCount === 3 ? 3 : 1 },
+    };
+    FOUNDATION_IDS.forEach((id, i) => { piles[id] = { x: 3 + i, y: 0, fan: 'stack', slot: 'foundation', label: FOUNDATION_SUIT_HINT[i] }; });
+    TABLEAU_IDS.forEach((id, i) => { piles[id] = { x: i, y: 1.2, fan: 'down', slot: 'tableau' }; });
+    return { cols: 7, rows: 3.4, piles, cascade: FOUNDATION_IDS };
   }
 
-  top(id) {
-    const p = this.piles[id];
-    return p[p.length - 1] ?? null;
+  stateKeys() {
+    return ['passes'];
   }
 
-  /** Where a card currently sits: { pileId, index } */
-  locate(cardId) {
-    for (const [pileId, pile] of Object.entries(this.piles)) {
-      const index = pile.findIndex((c) => c.id === cardId);
-      if (index !== -1) return { pileId, index };
+  options() {
+    return { drawCount: this.drawCount };
+  }
+
+  static fromJSON(data) {
+    // Saves from before there were several games kept these at the top level.
+    if (!data.options) data = { ...data, options: { drawCount: data.drawCount }, extra: { passes: data.passes ?? 0 } };
+    return super.fromJSON(data);
+  }
+
+  dealOrder() {
+    const out = [];
+    for (let row = 0; row < 7; row++) {
+      TABLEAU_IDS.forEach((id, col) => { if (col >= row) out.push(this.piles[id][row]); });
     }
-    return null;
+    return out;
   }
 
   // ---- stock ---------------------------------------------------------------
@@ -63,8 +76,10 @@ export class Klondike {
     if (stock.length === 0) {
       while (waste.length) stock.push({ ...waste.pop(), faceUp: false });
       this.passes += 1;
-      if (this.drawCount === 1) this.score = Math.max(0, this.score + POINTS.recycle);
-      return { recycled: true, cards: [] };
+      const penalty = this.drawCount === 1 ? POINTS.recycle : 0;
+      const before = this.score;
+      this.score = Math.max(0, this.score + penalty);
+      return { recycled: true, cards: [], points: this.score - before };
     }
     const cards = [];
     for (let i = 0; i < this.drawCount && stock.length; i++) {
@@ -72,12 +87,11 @@ export class Klondike {
       waste.push(card);
       cards.push(card);
     }
-    return { recycled: false, cards };
+    return { recycled: false, cards, points: 0 };
   }
 
   // ---- moving cards --------------------------------------------------------
 
-  /** The cards that would be picked up by grabbing pileId at index, or null if not grabbable. */
   grabbable(pileId, index) {
     const pile = this.piles[pileId];
     if (!pile || index < 0 || index >= pile.length) return null;
@@ -109,15 +123,10 @@ export class Klondike {
     return false;
   }
 
-  canMove(fromId, index, toId) {
-    if (fromId === toId) return false;
-    return this.canPlace(this.grabbable(fromId, index), toId);
-  }
-
-  /** Move the run starting at index. Returns { cards, flipped } or null if illegal. */
   move(fromId, index, toId) {
     if (!this.canMove(fromId, index, toId)) return null;
     this.snapshot();
+    const before = this.score;
     const from = this.piles[fromId];
     const cards = from.splice(index);
     this.piles[toId].push(...cards);
@@ -127,17 +136,17 @@ export class Klondike {
     else if (fromId === 'waste') this.score += POINTS.wasteToTableau;
     else if (fromId.startsWith('f')) this.score = Math.max(0, this.score + POINTS.foundationToTableau);
 
-    let flipped = null;
+    const flipped = [];
     const newTop = from[from.length - 1];
     if (fromId.startsWith('t') && newTop && !newTop.faceUp) {
       newTop.faceUp = true;
-      flipped = newTop;
+      flipped.push(newTop);
       this.score += POINTS.flip;
     }
-    return { cards, flipped };
+    return { cards, flipped, flipPoints: POINTS.flip, home: toId.startsWith('f'), points: this.score - before };
   }
 
-  /** Best place to send a grabbed run on a tap/double-click: foundation first, then tableau. */
+  /** Foundation first, then tableau. */
   bestTarget(fromId, index) {
     const cards = this.grabbable(fromId, index);
     if (!cards) return null;
@@ -154,7 +163,6 @@ export class Klondike {
 
   // ---- helpers for the player ----------------------------------------------
 
-  /** Useful moves, most valuable first. Each is { fromId, index, toId } or { draw: true }. */
   hints() {
     const out = [];
     const sources = ['waste', ...TABLEAU_IDS];
@@ -196,50 +204,21 @@ export class Klondike {
       && TABLEAU_IDS.every((id) => this.piles[id].every((c) => c.faceUp));
   }
 
-  /** The next card to fly home during auto-complete (lowest rank first). */
   nextAutoMove() {
-    let best = null;
-    for (const fromId of ['waste', ...TABLEAU_IDS]) {
-      const card = this.top(fromId);
-      if (!card) continue;
-      const toId = FOUNDATION_IDS.find((id) => this.canPlace([card], id));
-      if (toId && (!best || rankValue(card) < rankValue(best.card))) {
-        best = { fromId, index: this.piles[fromId].length - 1, toId, card };
-      }
+    return lowestHomeMove(this, ['waste', ...TABLEAU_IDS], FOUNDATION_IDS);
+  }
+}
+
+/** The lowest-ranked card that can go to a foundation right now. */
+export function lowestHomeMove(game, sources, foundations) {
+  let best = null;
+  for (const fromId of sources) {
+    const card = game.top(fromId);
+    if (!card) continue;
+    const toId = foundations.find((id) => game.canPlace([card], id));
+    if (toId && (!best || rankValue(card) < rankValue(best.card))) {
+      best = { fromId, index: game.piles[fromId].length - 1, toId, card };
     }
-    return best;
   }
-
-  // ---- undo & save ---------------------------------------------------------
-
-  snapshot() {
-    this.history.push(JSON.stringify({ piles: this.piles, score: this.score, passes: this.passes }));
-    if (this.history.length > 500) this.history.shift();
-  }
-
-  canUndo() {
-    return this.history.length > 0;
-  }
-
-  undo() {
-    const prev = this.history.pop();
-    if (!prev) return false;
-    const { piles, score, passes } = JSON.parse(prev);
-    this.piles = piles;
-    this.score = score;
-    this.passes = passes;
-    this.moves += 1;
-    return true;
-  }
-
-  toJSON() {
-    const { seed, drawCount, score, moves, passes, piles } = this;
-    return { seed, drawCount, score, moves, passes, piles };
-  }
-
-  static fromJSON(data) {
-    const game = new Klondike({ seed: data.seed, drawCount: data.drawCount });
-    Object.assign(game, { score: data.score, moves: data.moves, passes: data.passes, piles: data.piles, history: [] });
-    return game;
-  }
+  return best;
 }
