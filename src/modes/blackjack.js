@@ -227,6 +227,8 @@ export function createBlackjack(ctx) {
     store.set('bank:blackjack', game.bank);
     const s = stats();
     const wins = e.results.filter((r) => r.net > 0).length;
+    for (const r of e.results) ctx.trophy('blackjack', { result: r.result, splitWins: e.results.length === 2 ? wins : 0 });
+    ctx.trophy('bank', { bank: game.bank });
     store.set('stats:blackjack', { ...s, played: s.played + 1, won: s.won + (wins ? 1 : 0), best: Math.max(s.best, game.bank) });
     render();
     if (e.dealerBust) whisper('the dealer burst open');

@@ -1,6 +1,6 @@
 import { Holdem } from '../engine/poker/holdem.js';
 import { decide } from '../engine/poker/bot.js';
-import { describe } from '../engine/poker/hands.js';
+import { describe, categoryOf } from '../engine/poker/hands.js';
 import { sleep, flyChips } from '../ui/felt.js';
 
 // Texas Hold'em at the haunted table: you against up to five bots. The engine
@@ -374,7 +374,10 @@ export function createPoker(ctx) {
       }
       render();
       const youWon = pot.winners.some((w) => w.seat === 0);
-      if (youWon) cheer(pot.winners.find((w) => w.seat === 0).won, pot.winners.length > 1 ? 'you share the spoils' : null);
+      if (youWon) {
+        cheer(pot.winners.find((w) => w.seat === 0).won, pot.winners.length > 1 ? 'you share the spoils' : null);
+        ctx.trophy('showdown-win', { category: categoryOf(e.hands[0].score) });
+      }
       else if (pot.eligible.includes(0)) {
         const p = felt.screen(platePos(0).x, platePos(0).y);
         fx.burst(p.x, p.y, { palette: 'blood', count: 30, speed: 6 });
@@ -488,6 +491,7 @@ export function createPoker(ctx) {
   function finish() {
     ctx.store.set('save:holdem', null);
     const won = !game.seats[0].out;
+    if (won) ctx.trophy('holdem-win', { level });
     status(won ? 'the table is yours' : 'you have nothing left to bet');
     ctx.finish({
       won,

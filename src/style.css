@@ -316,7 +316,7 @@ button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
   filter: drop-shadow(0 calc(var(--px) * 0.6) 0 rgba(0, 0, 0, 0.55));
 }
 .card.is-dragging .card-face, .card.is-flying .card-face { filter: drop-shadow(0 calc(var(--px) * 2.5) calc(var(--px) * 1.5) rgba(0, 0, 0, 0.6)); }
-.card-back { transform: rotateY(180deg); }
+.card-back { transform: rotateY(180deg); background-image: var(--card-back); background-size: 100% 100%; }
 .card-index {
   position: absolute;
   left: calc(var(--px) * 0.5);
@@ -538,6 +538,105 @@ button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
 .raise-slider { width: min(260px, 60vw); accent-color: var(--pumpkin); }
 .table-status { margin: auto 0; color: var(--ink-dim); letter-spacing: 0.12em; min-height: 1.2em; }
 .chip-btn { background: #3a1510; box-shadow: 0 4px 0 #0b0509, inset 0 0 0 2px var(--pumpkin); }
+
+/* ---------- video poker ---------- */
+
+.felt[data-mode='videopoker'] .card { cursor: pointer; }
+.paytable {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 24px));
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(10, 4, 20, 0.85);
+  box-shadow: inset 0 0 0 2px #2e2a8a, 0 0 30px rgba(80, 60, 255, 0.2);
+  font-size: clamp(0.62rem, 2.4vw, 0.85rem);
+}
+.pay-row { display: grid; grid-template-columns: 2.6fr repeat(5, 1fr); gap: 2px; padding: 1px 4px; color: #ffd27a; }
+.pay-row span { text-align: left; white-space: nowrap; }
+.pay-row b { text-align: right; font-weight: 600; color: rgba(255, 210, 122, 0.55); }
+.pay-row b.is-bet { color: #ffd27a; background: rgba(168, 0, 0, 0.55); border-radius: 3px; padding-right: 3px; }
+.pay-row.is-hit { background: var(--blood); color: var(--bone); border-radius: 4px; animation: pay-flash 0.5s steps(2) 4; }
+.pay-row.is-hit b { color: var(--bone); }
+@keyframes pay-flash { 50% { background: var(--pumpkin); } }
+.vp-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(1rem, 4.5vw, 1.6rem);
+  letter-spacing: 0.15em;
+  color: var(--ink-dim);
+  text-shadow: 0 3px 0 #000;
+}
+.vp-banner[data-kind='win'] { color: var(--ecto); animation: bump 420ms var(--bounce); }
+.vp-banner[data-kind='tease'] { color: var(--pumpkin); }
+.vp-banner[data-kind='lose'] { color: var(--blood-hi); }
+.held-tag {
+  position: absolute;
+  z-index: 300;
+  transform: translate(-50%, -50%) scale(0.6);
+  padding: 1px 6px 2px;
+  border-radius: 3px;
+  background: var(--pumpkin);
+  color: #1a0408;
+  font-size: 0.8rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, transform 0.2s var(--bounce);
+}
+.held-tag.is-on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.felt .card.is-held .card-face { filter: drop-shadow(0 0 8px var(--pumpkin)) drop-shadow(0 calc(var(--px) * 0.6) 0 rgba(0, 0, 0, 0.55)); }
+
+/* ---------- trophies, rules, toasts ---------- */
+
+.btn--trophy { background: #3a2a06; box-shadow: 0 4px 0 #0b0509, inset 0 0 0 2px #ffd27a; color: #ffd27a; }
+.win-card.rules-card, .win-card.trophy-card { text-align: left; }
+.rules-card .win-eyebrow, .rules-card .win-title, .trophy-card .win-eyebrow, .trophy-card .win-title { text-align: center; }
+.rules-list { margin: 0 0 18px; padding-left: 20px; display: grid; gap: 8px; line-height: 1.35; }
+.trophy-card { width: min(520px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.trophy-body { overflow-y: auto; margin-bottom: 14px; touch-action: pan-y; }
+.trophy-count { margin: 0 0 10px; text-align: center; color: var(--ink-dim); }
+.back-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 16px; }
+.back-choice {
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--panel-hi);
+  box-shadow: inset 0 0 0 2px var(--edge);
+  cursor: pointer;
+}
+.back-choice img { display: block; width: 45px; height: 65px; image-rendering: pixelated; }
+.back-choice[aria-pressed='true'] { box-shadow: inset 0 0 0 3px var(--ecto), 0 0 14px rgba(125, 255, 154, 0.5); }
+.back-choice:disabled { cursor: default; filter: grayscale(1) brightness(0.35); }
+.trophy-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trophy-list li { display: grid; padding: 6px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.3); opacity: 0.55; }
+.trophy-list li.is-earned { opacity: 1; box-shadow: inset 3px 0 0 #ffd27a; }
+.trophy-list strong { color: #ffd27a; }
+.trophy-list span { font-size: 0.8rem; color: var(--ink-dim); }
+.toasts { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 1100; display: grid; gap: 8px; pointer-events: none; }
+.toast {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+  min-width: 240px;
+  padding: 8px 14px 9px;
+  border-radius: 8px;
+  background: rgba(22, 12, 19, 0.97);
+  box-shadow: inset 0 0 0 2px #ffd27a, 0 6px 0 #0b0509, 0 0 30px rgba(255, 210, 122, 0.35);
+  animation: toast-in 0.5s var(--bounce);
+}
+.toast img { grid-row: span 3; width: 27px; height: 39px; image-rendering: pixelated; }
+.toast-label { font-size: 0.65rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--pumpkin); }
+.toast strong { color: #ffd27a; font-size: 1.05rem; }
+.toast small { color: var(--ink-dim); }
+.toast.is-leaving { opacity: 0; transform: translateY(-16px); transition: opacity 0.5s, transform 0.5s; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-30px) scale(0.8); } }
 
 /* ---------- popups ---------- */
 

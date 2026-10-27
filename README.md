@@ -3,7 +3,7 @@
 GAME LINK: 
 https://stawberrymind.github.io/spooky_cards/
 
-Haunted card games in a pixel-art style that takes after Balatro: wobbly cards, a swirling background, screen shake, particles, haptics, and things watching you from the dark. Four solitaires, Texas Hold'em against bots, and Blackjack. Pick the game on the menu.
+Haunted card games in a pixel-art style that takes after Balatro: wobbly cards, a swirling background, screen shake, particles, haptics, and things watching you from the dark. Six solitaires, Texas Hold'em against bots, Video Poker and Blackjack, with trophies that unlock new card backs. Pick the game on the menu. It installs to your phone's home screen and plays offline.
 
 ## Run locally
 
@@ -27,6 +27,8 @@ Then open the URL Vite prints (usually http://localhost:5173).
 | **Klondike** | Build four foundations up by suit from Ace to King. Build the seven columns down in alternating colours (red: hearts and diamonds; dark: clubs and spades). Only Kings go into an empty column. | Draw 1 or Draw 3 |
 | **FreeCell** | Every card is dealt face up into eight columns. Same building rules as Klondike, but any card can fill an empty column, and four free cells each hold one card. How many cards you can move at once depends on how many cells and columns are free. | |
 | **Spider** | Two decks, ten columns. Build down regardless of suit, but only same-suit runs move together. A complete King-to-Ace run of one suit leaves the table. Tap the deck to deal one card onto every column (not while a column is empty). | 1, 2 or 4 suits |
+| **Pyramid** | Remove two free cards that add up to 13 by dropping one on the other (Jack 11, Queen 12). A King is 13 on its own: tap it. A card is free once both cards overlapping it are gone. The deck can be gone through three times. | |
+| **Golf** | Play the bottom card of any column onto the pile if it is one rank above or below. No wrapping, and nothing goes on a King. The deck only goes through once. Streaks score more. | |
 | **TriPeaks** | Clear the three peaks. A card can go onto the waste pile if it is one rank above or below it (King and Ace wrap). Cards unlock once nothing overlaps them. Every card in a row without drawing grows the streak, and the streak multiplies the points. | |
 
 - **Drag** a card or a run of cards to move it, or **tap** a card to send it to the best spot.
@@ -41,6 +43,8 @@ Scoring ("Souls"):
 - **Klondike:** classic Windows scoring. +10 to a foundation, +5 waste to tableau, +5 for each card turned face up, −15 for taking a card back off a foundation, −100 per recycle in Draw 1.
 - **FreeCell:** +10 per card on a foundation.
 - **Spider:** starts at 500, −1 per move, +100 per run laid to rest.
+- **Pyramid:** +10 per pair or King, +25 per row cleared, +500 for the whole pyramid.
+- **Golf:** 10 × the streak for each card, +500 for clearing the table plus 20 per card left in the deck.
 - **TriPeaks:** 10 × the streak for each card, +150 for each peak, +500 for clearing the table.
 
 ### Hold'em
@@ -57,6 +61,10 @@ No-limit Texas Hold'em against 1 to 5 bots, tournament style: everyone starts wi
 - Simplification: any raise, even a short all-in, re-opens the betting.
 - Leaving mid-hand saves the table as it was before that hand; Continue deals a fresh hand.
 
+### Video Poker
+
+Jacks or Better with the full-pay 9/6 table. Bet 1 to 5 souls, tap the cards you want to keep, then draw once. A pair of Jacks or better pays; a Royal Flush on a 5-soul bet pays 4,000. **Hint** holds the cards a decent strategy would keep. Your bank carries over between visits. Keys: `1`–`5` hold, `H` hint, `Enter` deal or draw.
+
 ### Blackjack
 
 - Six-deck shoe. The dealer stands on all 17s and checks for blackjack. Blackjack pays 3 to 2.
@@ -64,16 +72,25 @@ No-limit Texas Hold'em against 1 to 5 bots, tournament style: everyone starts wi
 - Your bank of souls carries over between visits. Lose it all and the house lends you another 1,000.
 - **Hit** `H`, **Stand** `S`, **Double** `D`, **Split** `P`, **Deal** `Enter`.
 
+### Everywhere
+
+- **Trophies** on the menu: 22 goals across every game. Six of them unlock new card backs (Skull, Web, Lantern, Coffin, Bat, Moth), which you pick in the trophy room.
+- **?** in any game shows its rules. They also appear the first time you play a game.
+- **Buzz** on the menu turns vibration on or off.
+- **Install:** on a phone, use "Add to Home Screen" (or the install button in a desktop browser). After the first visit the game works offline.
+
 ## Code layout
 
 | Path | What it is |
 | --- | --- |
 | `src/engine/base.js` | What every game provides (moves, hints, layout), plus shared undo and save/load. No DOM. |
-| `src/engine/klondike.js`, `freecell.js`, `spider.js`, `tripeaks.js` | The rules of each game |
+| `src/engine/klondike.js`, `freecell.js`, `spider.js`, `tripeaks.js`, `pyramid.js`, `golf.js` | The rules of each solitaire |
 | `src/engine/games.js` | The menu's list of games, their options and start-of-game whispers |
-| `src/engine/poker/` | Hold'em: hand ranking (`hands.js`), the betting and side-pot engine (`holdem.js`), bots (`bot.js`) |
+| `src/engine/poker/` | Hand ranking (`hands.js`), the Hold'em betting and side-pot engine (`holdem.js`), bots (`bot.js`), Video Poker (`videopoker.js`) |
 | `src/engine/blackjack.js` | Blackjack rules and payouts |
-| `src/modes/poker.js`, `src/modes/blackjack.js` | The table screens: play the engine's events back as animation, take your actions |
+| `src/modes/poker.js`, `videopoker.js`, `blackjack.js` | The table screens: play the engine's events back as animation, take your actions |
+| `src/ui/trophies.js` | Trophies, the trophy room and card back picker |
+| `assets/sw.js`, `assets/manifest.webmanifest`, `assets/icons/` | Offline play and installing to a home screen |
 | `src/ui/felt.js` | Places cards and chips on the poker and blackjack tables |
 | `src/engine/cards.js` | Card model, seeded shuffle |
 | `src/ui/board.js` | Card rendering, drag and tap input. Places piles from each game's `layout()` |
@@ -92,7 +109,7 @@ All card art is driven by `assets/cards/manifest.json`, so a new deck needs no c
 - `sprite.crop`: where the card sits inside that image (`x`, `y`, `width`, `height`). The card is drawn at an integer multiple of this size, so keep it pixel art.
 - `suits.<suit>.cards`: one image file per rank (`2`–`10`, `11` = Jack, `12` = Queen, `13` = King, `14` = Ace), relative to `assets/cards/`.
 - `suits.<suit>.color`: colour of the rank and suit label drawn in the corner.
-- `back`: an image file for the card back. Leave it `null` to use the built-in pixel eye.
+- `back`: an image file for your own card back. It shows up in the trophy room as an extra choice. Leave it `null` to use only the built-in pixel backs.
 - `showIndex`: set to `false` if your art already shows the rank and suit clearly.
 
 ## GitHub Pages

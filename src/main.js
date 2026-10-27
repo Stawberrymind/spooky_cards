@@ -1,13 +1,15 @@
 import './style.css';
 import { GAMES, GAME_IDS, createGame, optionsFor } from './engine/games.js';
-import { loadArt } from './ui/art.js';
+import { loadArt, setBack } from './ui/art.js';
 import { Board } from './ui/board.js';
 import { startBackground } from './ui/background.js';
 import { sfx, setSound, unlockAudio } from './ui/audio.js';
-import { burst, shake, popup, bump, buzz, startCascade, stopCascade } from './ui/fx.js';
+import { burst, shake, popup, bump, buzz, setHaptics, startCascade, stopCascade } from './ui/fx.js';
 import { Felt } from './ui/felt.js';
 import { createPoker } from './modes/poker.js';
 import { createBlackjack } from './modes/blackjack.js';
+import { createVideoPoker } from './modes/videopoker.js';
+import { createTrophies } from './ui/trophies.js';
 
 const $ = (id) => document.getElementById(id);
 const BASE = import.meta.env.BASE_URL;
@@ -40,7 +42,7 @@ for (const key of ['save', 'stats']) {
   }
 }
 
-const settings = { game: 'klondike', sound: true, music: false, scares: true, ...store.get('settings', {}) };
+const settings = { game: 'klondike', sound: true, music: false, scares: true, haptics: true, ...store.get('settings', {}) };
 if (!GAMES[settings.game]) settings.game = 'klondike';
 
 const freshStats = () => ({ played: 0, won: 0, bestTime: null, bestScore: 0 });
@@ -63,8 +65,10 @@ let lastShownScore = 0;
 let idleTimer = null;
 let scareTimer = null;
 let busyUntil = 0;
-let table = null; // the running poker/blackjack controller
+let table = null; // the running poker/blackjack/video poker controller
 const modes = {};
+let trophies = null;
+let isDaily = false;
 
 const WHISPERS = {
   idle: ['the cards are getting cold', 'something shuffles behind you', 'it is waiting for you to move', 'do not look at the stock'],
@@ -78,11 +82,15 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 async function boot() {
   setSound(settings.sound);
+  setHaptics(settings.haptics);
   bg = startBackground($('bg'));
   animatePumpkin();
   buildGamePicker();
   syncMenu();
   await loadArt();
+  trophies = createTrophies({ store, sfx, fx: { buzz }, onBack: setBack });
+  setBack(trophies.back());
+  trophies.check('start');
 
   board = new Board($('board'), { draw, move, autoMove, grab: () => sfx.pick(), drop: () => { sfx.nope(); buzz(30); } });
   const tableCtx = {
@@ -96,9 +104,11 @@ async function boot() {
     bump,
     hud: setTableHud,
     finish: showResult,
+    trophy: (event, data) => trophies.check(event, data),
   };
   modes.poker = createPoker(tableCtx);
   modes.blackjack = createBlackjack(tableCtx);
+  modes.videopoker = createVideoPoker(tableCtx);
   syncMenu();
   window.addEventListener('resize', () => {
     if (table) table.layout();
@@ -124,6 +134,21 @@ async function boot() {
     settings.scares = !settings.scares;
     saveSettings();
   });
+  $('haptics-toggle').addEventListener('click', () => {
+    settings.haptics = !settings.haptics;
+    setHaptics(settings.haptics);
+    buzz(30);
+    saveSettings();
+  });
+  $('trophies-button').addEventListener('click', () => {
+    trophies.renderRoom($('trophy-body'));
+    $('trophy-room').hidden = false;
+    sfx.pick();
+  });
+  $('trophy-close').addEventListener('click', () => { $('trophy-room').hidden = true; });
+  $('rules-button').addEventListener('click', () => openRules(gameId));
+  $('table-rules-button').addEventListener('click', () => openRules(gameId));
+  $('rules-close').addEventListener('click', closeRules);
 
   $('undo-button').addEventListener('click', undo);
   $('hint-button').addEventListener('click', hint);
@@ -189,14 +214,18 @@ function syncMenu() {
   $('music-toggle').setAttribute('aria-pressed', String(settings.music));
   $('scare-toggle').textContent = `Scares: ${settings.scares ? 'on' : 'off'}`;
   $('scare-toggle').setAttribute('aria-pressed', String(settings.scares));
+  $('haptics-toggle').textContent = `Buzz: ${settings.haptics ? 'on' : 'off'}`;
+  $('haptics-toggle').setAttribute('aria-pressed', String(settings.haptics));
+  if (trophies) $('trophies-button').textContent = `Trophies ${trophies.count()}`;
   $('continue-button').hidden = !store.get(`save:${settings.game}`, null);
   $('menu-stats').textContent = menuStats(settings.game);
 }
 
 function menuStats(id) {
-  if (id === 'blackjack') {
-    const s = modes.blackjack?.stats();
-    return s ? `${modes.blackjack.bank()} souls in the bank${s.played ? ` · best ${s.best}` : ''}` : '';
+  const banked = modes[GAMES[id].mode];
+  if (banked?.bank) {
+    const s = banked.stats();
+    return `${banked.bank()} souls in the bank${s.played ? ` · best ${s.best}` : ''}`;
   }
   const s = statsFor(id);
   if (!s.played) return '';
@@ -267,6 +296,7 @@ function newGame({ daily = false } = {}) {
     return;
   }
   start(id, createGame(id, seed, settings), 0);
+  isDaily = daily;
   stats.played += 1;
   store.set(`stats:${gameId}`, stats);
   whisper(daily ? 'today\'s haunting is the same for everyone' : pick(GAMES[id].whispers));
@@ -286,7 +316,8 @@ function startTable(id, options) {
   stopTable();
   table = modes[GAMES[id].mode];
   table.start(options);
-  if (fresh && id !== 'blackjack') {
+  showRulesOnce(id);
+  if (fresh && GAMES[id].mode === 'poker') {
     const s = statsFor(id);
     s.played += 1;
     store.set(`stats:${id}`, s);
@@ -300,6 +331,33 @@ function continueGame() {
   if (!save) return newGame();
   if (GAMES[settings.game].mode) return startTable(settings.game, { resume: save });
   start(settings.game, GAMES[settings.game].Game.fromJSON(save.game), save.elapsed ?? 0, { deal: false });
+  isDaily = false;
+}
+
+// ---- how to play ------------------------------------------------------------
+
+function openRules(id) {
+  $('rules-title').textContent = GAMES[id].title;
+  $('rules-list').replaceChildren(...GAMES[id].rules.map((line) => {
+    const li = document.createElement('li');
+    li.textContent = line;
+    return li;
+  }));
+  $('rules').hidden = false;
+  sfx.pick();
+}
+
+function closeRules() {
+  $('rules').hidden = true;
+}
+
+/** The first time someone plays a game, show them how. */
+function showRulesOnce(id) {
+  const seen = store.get('rules-seen', []);
+  if (seen.includes(id)) return;
+  store.set('rules-seen', [...seen, id]);
+  // Only if they're still at that game by then.
+  setTimeout(() => { if (gameId === id && $('menu-screen').hidden && $('win').hidden) openRules(id); }, 700);
 }
 
 function start(id, nextGame, startElapsed, { deal = true } = {}) {
@@ -316,6 +374,7 @@ function start(id, nextGame, startElapsed, { deal = true } = {}) {
   board.setGame(game);
   showGame();
   $('game-screen').dataset.game = id;
+  showRulesOnce(id);
   if (deal) dealAnimation();
   else board.render({ instant: true });
   updateHud(false);
@@ -397,13 +456,16 @@ function celebrate(res, toId) {
 
   if (res.home) {
     // TriPeaks keeps its own streak; elsewhere quick foundation moves chain up.
-    if (res.streak) combo = res.streak;
+    if (res.streak) {
+      combo = res.streak;
+      trophies.check('streak', { streak: res.streak });
+    }
     else {
       combo += 1;
       clearTimeout(comboTimer);
       comboTimer = setTimeout(() => { combo = 0; }, 3500);
     }
-    const at = board.centerOf(toId);
+    const at = board.centerOf(res.homeId ?? toId);
     const gained = res.points - res.flipped.length * (res.flipPoints ?? 0);
     sfx.foundation(combo);
     buzz(14);
@@ -452,6 +514,7 @@ function suitFanfare(at, text) {
 
 /** Spider: a finished K→A run has left the table. */
 function runLaidToRest(completed, delay) {
+  trophies.check('spider-run');
   setTimeout(() => {
     const at = board.centerOf(completed.toId);
     suitFanfare(at, 'SUIT LAID TO REST');
@@ -542,6 +605,8 @@ function winSequence() {
   stats.bestTime = stats.bestTime ? Math.min(stats.bestTime, elapsed) : elapsed;
   stats.bestScore = Math.max(stats.bestScore, game.score);
   store.set(`stats:${gameId}`, stats);
+  const totalWins = Object.keys(GAMES).filter((id) => GAMES[id].Game).reduce((sum, id) => sum + statsFor(id).won, 0);
+  trophies.check('solitaire-win', { game: gameId, elapsed, daily: isDaily, suits: game.suits, totalWins });
   store.set(`save:${gameId}`, null);
   clearTimeout(scareTimer);
   clearTimeout(idleTimer);
@@ -690,6 +755,18 @@ function scare() {
 
 function onKey(e) {
   const key = e.key.toLowerCase();
+  if (!$('rules').hidden || !$('trophy-room').hidden) {
+    if (key === 'escape' || key === 'enter') {
+      e.preventDefault();
+      closeRules();
+      $('trophy-room').hidden = true;
+    }
+    return;
+  }
+  if (key === '?' && $('menu-screen').hidden) {
+    openRules(gameId);
+    return;
+  }
   if (table && !$('table-screen').hidden) {
     if (key === 'escape') showMenu();
     else if (table.key(key)) e.preventDefault();
@@ -706,6 +783,11 @@ function onKey(e) {
 // Dev-only handle for poking at the game from the console.
 if (import.meta.env.DEV) {
   window.__solitaire = { get game() { return game; }, board: () => board, start, afterMove, createGame, get table() { return table; } };
+}
+
+// Installable and playable offline (production builds only: the dev server changes too often).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
 boot();

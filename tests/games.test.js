@@ -4,6 +4,8 @@ import { GAMES, GAME_IDS, createGame } from '../src/engine/games.js';
 import { FreeCell, TABLEAU_IDS as FC_TABLEAU, FOUNDATION_IDS as FC_FOUNDATIONS } from '../src/engine/freecell.js';
 import { Spider, TABLEAU_IDS as SP_TABLEAU } from '../src/engine/spider.js';
 import { TriPeaks, PEAK_IDS } from '../src/engine/tripeaks.js';
+import { Pyramid } from '../src/engine/pyramid.js';
+import { Golf } from '../src/engine/golf.js';
 import { mulberry32 } from '../src/engine/cards.js';
 
 const card = (rank, suit, faceUp = true, copy = '') => ({ id: `${rank}${suit[0]}${copy}`, rank, suit, faceUp });
@@ -176,4 +178,51 @@ test('tripeaks: streak multiplies points and resets on a draw', () => {
   g.draw();
   assert.equal(g.streak, 0);
   assert.equal(PEAK_IDS.length, 28);
+});
+
+// ---- Pyramid ----------------------------------------------------------------
+
+test('pyramid: pairs to 13 leave together, Kings leave alone, covered cards wait', () => {
+  const g = cleared(Pyramid);
+  g.piles.p21 = [card('6', 'hearts')];
+  g.piles.p22 = [card('7', 'clubs')];
+  g.piles.p27 = [card('K', 'spades')];
+  g.piles.p15 = [card('Q', 'hearts')]; // covered by p21 and p22
+  assert.equal(g.grabbable('p15', 0), null);
+  assert.ok(g.canMove('p21', 0, 'p22'));
+  const res = g.move('p21', 0, 'p22');
+  assert.equal(res.cards.length, 2);
+  assert.equal(g.pile('discard').length, 2);
+  assert.ok(g.grabbable('p15', 0), 'uncovered once both are gone');
+  assert.ok(g.canMove('p27', 0, 'discard'));
+  assert.equal(g.canMove('p15', 0, 'discard'), false, 'only Kings go alone');
+});
+
+test('pyramid: the waste pairs with the pyramid, and the stock has three passes', () => {
+  const g = new Pyramid({ seed: 2 });
+  for (let pass = 1; pass <= 3; pass++) {
+    while (g.pile('stock').length) g.draw();
+    if (pass < 3) assert.ok(g.draw().recycled);
+  }
+  assert.equal(g.canDraw(), false);
+  const h = cleared(Pyramid);
+  h.piles.waste = [card('4', 'clubs')];
+  h.piles.p27 = [card('9', 'hearts')];
+  assert.equal(h.bestTarget('waste', 0), 'p27');
+});
+
+// ---- Golf -------------------------------------------------------------------
+
+test('golf: one up or down, no wrapping, nothing on a King', () => {
+  const g = cleared(Golf);
+  g.piles.waste = [card('K', 'clubs')];
+  g.piles.t0 = [card('Q', 'hearts')];
+  g.piles.t1 = [card('A', 'hearts')];
+  assert.equal(g.canMove('t0', 0, 'waste'), false);
+  assert.equal(g.canMove('t1', 0, 'waste'), false);
+  g.piles.waste = [card('A', 'clubs')];
+  assert.ok(g.canMove('t0', 0, 'waste') === false);
+  g.piles.t2 = [card('2', 'spades')];
+  assert.ok(g.move('t2', 0, 'waste'));
+  assert.equal(g.streak, 1);
 });

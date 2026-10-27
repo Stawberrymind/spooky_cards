@@ -141,3 +141,42 @@ test('save between hands round-trips, mid-hand saves the table before the hand',
   const copy = Holdem.fromJSON(JSON.parse(JSON.stringify(mid)));
   assert.ok(copy.startHand());
 });
+
+// ---- video poker --------------------------------------------------------------
+
+import { VideoPoker, payline, payout } from '../src/engine/poker/videopoker.js';
+
+test('video poker: the pay table, from Jacks to the Royal', () => {
+  const line = (str) => payline(cards(str))?.id ?? null;
+  assert.equal(line('Ah Kh Qh Jh Th'), 'royal');
+  assert.equal(line('9s 8s 7s 6s 5s'), 'straight-flush');
+  assert.equal(line('9s 9h 9d 9c 2s'), 'quads');
+  assert.equal(line('9s 9h 9d 2c 2s'), 'full-house');
+  assert.equal(line('Ks 9s 7s 4s 2s'), 'flush');
+  assert.equal(line('Ah 2d 3c 4s 5h'), 'straight');
+  assert.equal(line('9s 9h 9d Kc 2s'), 'trips');
+  assert.equal(line('9s 9h Kd Kc 2s'), 'two-pair');
+  assert.equal(line('Js Jh 9d 4c 2s'), 'jacks');
+  assert.equal(line('Ts Th 9d 4c 2s'), null, 'tens do not pay');
+  assert.equal(payout(payline(cards('Ah Kh Qh Jh Th')), 5), 4000, 'max bet royal');
+  assert.equal(payout(payline(cards('Ah Kh Qh Jh Th')), 4), 1000);
+  assert.equal(payout(payline(cards('Js Jh 9d 4c 2s')), 3), 3);
+});
+
+test('video poker: held cards stay, the rest are replaced, and the bank adds up', () => {
+  const rand = mulberry32(8);
+  const g = new VideoPoker({ seed: 3, bank: 100000 });
+  for (let round = 0; round < 2000; round++) {
+    g.setBet(1 + Math.floor(rand() * 5));
+    const before = g.bank;
+    const { hand } = g.deal();
+    const holds = g.suggestHolds(hand);
+    holds.forEach((h, i) => { if (h) g.toggle(i); });
+    const res = g.draw();
+    hand.forEach((c, i) => { if (holds[i]) assert.equal(res.hand[i].id, c.id); });
+    assert.equal(new Set(res.hand.map((c) => c.id)).size, 5);
+    assert.equal(g.bank, before - g.bet + res.won);
+  }
+  // Played with the hint, the full-pay table returns close to everything bet.
+  assert.ok(g.bank > 100000 * 0.97, `bank ${g.bank}`);
+});
