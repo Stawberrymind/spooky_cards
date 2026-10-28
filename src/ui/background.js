@@ -36,8 +36,8 @@ const VERT = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }
 
 export function startBackground(canvas) {
   const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
-  if (!gl) return { pulse() {} };
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!gl) return { pulse() {}, setCalm() {} };
+  let reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const compile = (type, src) => {
     const s = gl.createShader(type);
@@ -49,7 +49,7 @@ export function startBackground(canvas) {
   gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
   gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
   gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return { pulse() {} };
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return { pulse() {}, setCalm() {} };
   gl.useProgram(prog);
 
   const buf = gl.createBuffer();
@@ -88,6 +88,13 @@ export function startBackground(canvas) {
     /** Brighten the swirl for a moment (big moves). */
     pulse(amount = 1) {
       pulse = Math.min(3, pulse + amount);
+    },
+    /** Freeze the swirl (calm mode), or let it move again. */
+    setCalm(on) {
+      const was = reduceMotion;
+      reduceMotion = on || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (was && !reduceMotion) requestAnimationFrame(frame);
+      else if (!was && reduceMotion) requestAnimationFrame(frame);
     },
   };
 }

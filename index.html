@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#050005">
     <title>Spooooky Solitaire</title>
+    <meta name="description" content="Haunted pixel-art card games in your browser: six solitaires, Texas Hold'em with friends or bots, Video Poker and Blackjack. Free, no sign-up, plays offline.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Spooooky Solitaire">
+    <meta property="og:description" content="Haunted pixel-art card games: solitaires, Hold'em with friends, Video Poker and Blackjack. Free in your browser.">
+    <meta property="og:url" content="https://stawberrymind.github.io/spooky_cards/">
+    <meta property="og:image" content="https://stawberrymind.github.io/spooky_cards/social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://stawberrymind.github.io/spooky_cards/social.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
@@ -16,6 +26,10 @@
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
+    <div id="loading" class="loading" role="status">
+      <img src="./pumpkin/sprite_0.png" alt="" class="loading-pumpkin">
+      <p id="loading-text">summoning the cards…</p>
+    </div>
     <canvas id="bg" class="bg" aria-hidden="true"></canvas>
     <div id="eyes" class="eyes" aria-hidden="true"><span></span><span></span></div>
 
@@ -30,18 +44,18 @@
         <div class="game-picker" id="game-picker" role="radiogroup" aria-label="Game"></div>
         <p id="game-blurb" class="game-blurb"></p>
         <div class="menu-buttons">
-          <button id="continue-button" class="btn btn--big btn--ecto" type="button" hidden>Continue</button>
-          <button id="play-button" class="btn btn--big btn--blood" type="button">New game</button>
-          <button id="daily-button" class="btn btn--big btn--pumpkin" type="button">Daily haunt</button>
-          <button id="friends-button" class="btn btn--big btn--ecto" type="button" hidden>Play with friends</button>
+          <button id="continue-button" class="btn btn--big btn--ecto" type="button" data-icon="ghost" hidden>Continue</button>
+          <button id="play-button" class="btn btn--big btn--blood" type="button" data-icon="skull">New game</button>
+          <button id="daily-button" class="btn btn--big btn--pumpkin" type="button" data-icon="moon">Daily haunt</button>
+          <button id="friends-button" class="btn btn--big btn--ecto" type="button" data-icon="ghosts" hidden>Play with friends</button>
           <div class="menu-options">
             <span id="variant-toggles" class="variant-toggles"></span>
-            <button id="sound-toggle" class="btn btn--small" type="button" aria-pressed="true">Sound: on</button>
-            <button id="music-toggle" class="btn btn--small" type="button" aria-pressed="false">Music: off</button>
-            <button id="scare-toggle" class="btn btn--small" type="button" aria-pressed="true">Scares: on</button>
-            <button id="haptics-toggle" class="btn btn--small" type="button" aria-pressed="true">Buzz: on</button>
           </div>
-          <button id="trophies-button" class="btn btn--small btn--trophy" type="button">Trophies</button>
+          <div class="menu-row">
+            <button id="trophies-button" class="btn btn--small btn--trophy" type="button" data-icon="trophy">Trophies</button>
+            <button id="settings-button" class="btn btn--small" type="button" data-icon="gear">Settings</button>
+            <button id="about-button" class="btn btn--small" type="button" data-icon="info">About</button>
+          </div>
         </div>
         <p id="menu-stats" class="menu-stats"></p>
         <p class="tagline">look behind you</p>
@@ -63,11 +77,12 @@
             <strong id="hud-time" class="hud-value">0:00</strong>
           </div>
           <div class="hud-actions">
-            <button id="undo-button" class="btn btn--blood" type="button" title="Undo (Z)">Undo</button>
-            <button id="hint-button" class="btn btn--pumpkin" type="button" title="Hint (H)">Hint</button>
-            <button id="new-button" class="btn" type="button" title="New game (N)">New</button>
-            <button id="rules-button" class="btn" type="button" title="How to play (?)" aria-label="How to play">?</button>
-            <button id="menu-button" class="btn" type="button" title="Menu (Esc)">Menu</button>
+            <button id="undo-button" aria-label="Undo" class="btn btn--blood" type="button" title="Undo (Z)" data-icon="undo">Undo</button>
+            <button id="hint-button" aria-label="Hint" class="btn btn--pumpkin" type="button" title="Hint (H)" data-icon="eye">Hint</button>
+            <button id="new-button" aria-label="New game" class="btn" type="button" title="New game (N)" data-icon="cards">New</button>
+            <button id="rules-button" class="btn btn--icon" type="button" title="How to play (?)" aria-label="How to play" data-icon="help"></button>
+            <button id="game-settings-button" class="btn btn--icon" type="button" title="Settings" aria-label="Settings" data-icon="gear"></button>
+            <button id="menu-button" aria-label="Menu" class="btn" type="button" title="Menu (Esc)" data-icon="bars">Menu</button>
           </div>
         </header>
         <div id="board" class="board" aria-label="Cards"></div>
@@ -120,8 +135,9 @@
             <strong id="table-value-2" class="hud-value"></strong>
           </div>
           <div class="hud-actions">
-            <button id="table-rules-button" class="btn" type="button" title="How to play (?)" aria-label="How to play">?</button>
-            <button id="table-menu-button" class="btn" type="button" title="Menu (Esc)">Menu</button>
+            <button id="table-rules-button" class="btn btn--icon" type="button" title="How to play (?)" aria-label="How to play" data-icon="help"></button>
+            <button id="table-settings-button" class="btn btn--icon" type="button" title="Settings" aria-label="Settings" data-icon="gear"></button>
+            <button id="table-menu-button" aria-label="Menu" class="btn" type="button" title="Menu (Esc)" data-icon="bars">Menu</button>
           </div>
         </header>
         <div id="felt" class="felt" aria-label="Table"></div>
@@ -166,6 +182,72 @@
         <div id="trophy-body" class="trophy-body"></div>
         <div class="win-buttons">
           <button id="trophy-close" class="btn btn--big btn--blood" type="button">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="settings" class="win" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+      <div class="win-card settings-card">
+        <p class="win-eyebrow">tune the haunting</p>
+        <h2 id="settings-title" class="win-title">Settings</h2>
+        <div class="settings-list">
+          <label class="setting"><span>Music</span><input id="set-music" type="range" min="0" max="100" step="5"><output id="set-music-value"></output></label>
+          <label class="setting"><span>Sounds</span><input id="set-sound" type="range" min="0" max="100" step="5"><output id="set-sound-value"></output></label>
+          <button id="set-scares" class="setting setting--toggle" type="button"><span>Jump scares</span><b></b></button>
+          <button id="set-flashing" class="setting setting--toggle" type="button"><span>Flashing lights</span><b></b></button>
+          <button id="set-shake" class="setting setting--toggle" type="button"><span>Screen shake</span><b></b></button>
+          <button id="set-calm" class="setting setting--toggle" type="button"><span>Calm motion</span><b></b></button>
+          <button id="set-scanlines" class="setting setting--toggle" type="button"><span>Scanlines</span><b></b></button>
+          <button id="set-haptics" class="setting setting--toggle" type="button"><span>Vibration</span><b></b></button>
+        </div>
+        <div class="win-buttons">
+          <button id="set-fullscreen" class="btn" type="button" data-icon="expand">Fullscreen</button>
+          <button id="settings-close" class="btn btn--big btn--blood" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="about" class="win" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden>
+      <div class="win-card about-card">
+        <p class="win-eyebrow">who dug these graves</p>
+        <h2 id="about-title" class="win-title">About</h2>
+        <div class="about-body">
+          <p><strong>Spooooky Solitaire</strong> <span id="about-version"></span></p>
+          <h3>Made by</h3>
+          <p>Art and music: <strong>Lemonade</strong> (Nibodh)<br>Code: <strong>Rocketarmmind</strong> (Aarav)</p>
+          <h3>Privacy</h3>
+          <p>No accounts, no ads, no tracking. Your progress, trophies and settings are saved only in this browser.</p>
+          <p>Online lobbies connect players' browsers directly. The free PeerJS service introduces players and never sees the game, but connected players can see each other's IP address.</p>
+          <h3>Built with</h3>
+          <p><a href="https://github.com/peers/peerjs" target="_blank" rel="noopener">PeerJS</a> (MIT), <a href="https://fonts.google.com/specimen/Pixelify+Sans" target="_blank" rel="noopener">Pixelify Sans</a> (OFL), and <a href="https://vitejs.dev" target="_blank" rel="noopener">Vite</a>.</p>
+          <p><a href="https://github.com/Stawberrymind/spooky_cards" target="_blank" rel="noopener">Source code on GitHub</a></p>
+        </div>
+        <div class="win-buttons">
+          <button id="about-close" class="btn btn--big btn--blood" type="button">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="notice" class="win" role="dialog" aria-modal="true" aria-labelledby="notice-title" hidden>
+      <div class="win-card">
+        <p class="win-eyebrow">before you play</p>
+        <h2 id="notice-title" class="win-title">Heads Up</h2>
+        <p class="notice-text">This game has flickering lights, sudden scares and screen shake. You can change these any time in Settings.</p>
+        <div class="win-buttons">
+          <button id="notice-keep" class="btn btn--big btn--blood" type="button">Bring it on</button>
+          <button id="notice-calm" class="btn" type="button">Turn them off</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="crash" class="win" role="alertdialog" aria-modal="true" aria-labelledby="crash-title" hidden>
+      <div class="win-card">
+        <p class="win-eyebrow">something broke in the dark</p>
+        <h2 id="crash-title" class="win-title">The Spirits Fumbled</h2>
+        <p class="notice-text">Your progress is saved. Reloading usually fixes it.</p>
+        <div class="win-buttons">
+          <button id="crash-reload" class="btn btn--big btn--blood" type="button">Reload</button>
+          <button id="crash-dismiss" class="btn" type="button">Keep playing</button>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 // show up straight away) and from the cache when it isn't; everything else is
 // served from the cache and refreshed in the background.
 
-const CACHE = 'spooooky-v1';
+const CACHE = 'spooooky-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './cards/manifest.json'];
 
 self.addEventListener('install', (event) => {

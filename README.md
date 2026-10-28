@@ -17,6 +17,8 @@ Then open the URL Vite prints (usually http://localhost:5173).
 - `npm test`: engine tests (Node's built-in test runner)
 - `npm run build`: production build into `dist/`
 - `npm run preview`: serve the production build
+- `npm run package`: build and zip the game into `release/` for uploading to game portals
+- `npm run social`: redraw `assets/social.png`, the picture shown when the link is shared
 
 ## How to play
 
@@ -87,7 +89,8 @@ Jacks or Better with the full-pay 9/6 table. Bet 1 to 5 souls, tap the cards you
 
 - **Trophies** on the menu: 22 goals across every game. Six of them unlock new card backs (Skull, Web, Lantern, Coffin, Bat, Moth), which you pick in the trophy room.
 - **?** in any game shows its rules. They also appear the first time you play a game.
-- **Buzz** on the menu turns vibration on or off.
+- **Settings** (menu, or the gear in any game): music and sound volume, jump scares, flashing lights, screen shake, calm motion, scanlines and vibration. The first visit asks whether to keep the flashing and scares on.
+- **About** has the credits and a short privacy note.
 - **Install:** on a phone, use "Add to Home Screen" (or the install button in a desktop browser). After the first visit the game works offline.
 
 ## Code layout
@@ -125,6 +128,17 @@ All card art is driven by `assets/cards/manifest.json`, so a new deck needs no c
 - `suits.<suit>.color`: colour of the rank and suit label drawn in the corner.
 - `back`: an image file for your own card back. It shows up in the trophy room as an extra choice. Leave it `null` to use only the built-in pixel backs.
 - `showIndex`: set to `false` if your art already shows the rank and suit clearly.
+
+## Publishing
+
+The game is a static site, so it can go anywhere that hosts files.
+
+- **GitHub Pages** (already set up): every push to `main` is tested, built and deployed (see below).
+- **itch.io**: create a project, set *Kind of project* to **HTML**, upload the zip from `npm run package` and tick *This file will be played in the browser*. A viewport of 1280×800 with *Mobile friendly* and *Fullscreen button* switched on works well.
+- **Newgrounds, CrazyGames, Poki, GameDistribution**: all take the same zip. Some portals require their own ad or analytics code before they accept a game.
+- **Your own domain**: buy one, then add it under the repository's *Settings → Pages → Custom domain*. Also update the `og:url` and `og:image` links at the top of `index.html`.
+
+Before publishing under a different name, change the `<title>` and `og:title` in `index.html`, `name` and `short_name` in `assets/manifest.webmanifest`, and the title on the menu, then run `npm run social` to redraw the preview picture.
 
 ## GitHub Pages
 

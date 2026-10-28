@@ -4,12 +4,13 @@
 let ac = null;
 let master = null;
 let enabled = true;
+let volume = 0.8;
 
 function ctx() {
   if (!ac) {
     ac = new (window.AudioContext || window.webkitAudioContext)();
     master = ac.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = 0.6 * volume;
     master.connect(ac.destination);
   }
   if (ac.state === 'suspended') ac.resume();
@@ -18,6 +19,13 @@ function ctx() {
 
 export function setSound(on) {
   enabled = on;
+}
+
+/** Sound effects volume, 0–1. Zero switches them off entirely. */
+export function setSoundVolume(v) {
+  volume = Math.max(0, Math.min(1, v));
+  enabled = volume > 0;
+  if (master) master.gain.value = 0.6 * volume;
 }
 
 function tone({ freq = 440, type = 'square', dur = 0.12, vol = 0.2, slide = 0, delay = 0, attack = 0.005 }) {

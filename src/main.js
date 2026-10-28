@@ -3,8 +3,9 @@ import { GAMES, GAME_IDS, createGame, optionsFor } from './engine/games.js';
 import { loadArt, setBack } from './ui/art.js';
 import { Board } from './ui/board.js';
 import { startBackground } from './ui/background.js';
-import { sfx, setSound, unlockAudio } from './ui/audio.js';
-import { burst, shake, popup, bump, buzz, setHaptics, startCascade, stopCascade } from './ui/fx.js';
+import { sfx, setSoundVolume, unlockAudio } from './ui/audio.js';
+import { burst, shake, popup, bump, buzz, setHaptics, setShake, setReducedMotion, startCascade, stopCascade } from './ui/fx.js';
+import { decorateIcons } from './ui/icons.js';
 import { Felt } from './ui/felt.js';
 import { createPoker } from './modes/poker.js';
 import { createBlackjack } from './modes/blackjack.js';
@@ -43,8 +44,22 @@ for (const key of ['save', 'stats']) {
   }
 }
 
-const settings = { game: 'klondike', sound: true, music: false, scares: true, haptics: true, ...store.get('settings', {}) };
+const settings = {
+  game: 'klondike',
+  scares: true,
+  haptics: true,
+  flashing: true,
+  shake: true,
+  calm: false,
+  scanlines: true,
+  ...store.get('settings', {}),
+};
 if (!GAMES[settings.game]) settings.game = 'klondike';
+// Older saves had on/off switches for sound and music; now they're volumes (0–100).
+settings.soundVolume ??= settings.sound === false ? 0 : 80;
+settings.musicVolume ??= settings.music === false ? 0 : 40;
+delete settings.sound;
+delete settings.music;
 
 const freshStats = () => ({ played: 0, won: 0, bestTime: null, bestScore: 0 });
 const statsFor = (id) => ({ ...freshStats(), ...store.get(`stats:${id}`, {}) });
@@ -84,13 +99,18 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // ---- boot -------------------------------------------------------------------
 
 async function boot() {
-  setSound(settings.sound);
-  setHaptics(settings.haptics);
   bg = startBackground($('bg'));
+  applySettings();
+  decorateIcons();
   animatePumpkin();
   buildGamePicker();
   syncMenu();
-  await loadArt();
+  try {
+    await loadArt();
+  } catch {
+    $('loading-text').textContent = 'the cards would not come. check your connection and reload';
+    return false;
+  }
   trophies = createTrophies({ store, sfx, fx: { buzz }, onBack: setBack });
   setBack(trophies.back());
   trophies.check('start');
@@ -131,26 +151,15 @@ async function boot() {
   $('play-button').addEventListener('click', () => newGame());
   $('daily-button').addEventListener('click', () => newGame({ daily: true }));
   $('continue-button').addEventListener('click', continueGame);
-  $('sound-toggle').addEventListener('click', () => {
-    settings.sound = !settings.sound;
-    setSound(settings.sound);
-    saveSettings();
+  bindSettings();
+  $('about-button').addEventListener('click', () => {
+    $('about-version').textContent = `v${__APP_VERSION__}`;
+    $('about').hidden = false;
+    sfx.pick();
   });
-  $('music-toggle').addEventListener('click', () => {
-    settings.music = !settings.music;
-    saveSettings();
-    syncMusic();
-  });
-  $('scare-toggle').addEventListener('click', () => {
-    settings.scares = !settings.scares;
-    saveSettings();
-  });
-  $('haptics-toggle').addEventListener('click', () => {
-    settings.haptics = !settings.haptics;
-    setHaptics(settings.haptics);
-    buzz(30);
-    saveSettings();
-  });
+  $('about-close').addEventListener('click', () => { $('about').hidden = true; });
+  $('notice-keep').addEventListener('click', () => closeNotice(true));
+  $('notice-calm').addEventListener('click', () => closeNotice(false));
   $('trophies-button').addEventListener('click', () => {
     trophies.renderRoom($('trophy-body'));
     $('trophy-room').hidden = false;
@@ -169,11 +178,107 @@ async function boot() {
   $('win-again').addEventListener('click', () => (lastResultLobby ? showLobby() : newGame()));
   $('friends-button').addEventListener('click', () => showLobby());
   $('win-menu').addEventListener('click', showMenu);
-  document.addEventListener('pointerdown', unlockAudio, { once: true });
+  document.addEventListener('pointerdown', () => {
+    unlockAudio();
+    syncMusic();
+  }, { once: true });
   document.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
   setInterval(tickTimer, 1000);
+  $('loading').classList.add('is-done');
+  setTimeout(() => $('loading').remove(), 600);
+  // First visit: warn about flashing lights and scares before anything happens.
+  if (!store.get('notice-seen', false)) $('notice').hidden = false;
+  return true;
+}
+
+// ---- settings -----------------------------------------------------------------
+
+const TOGGLES = ['scares', 'flashing', 'shake', 'calm', 'scanlines', 'haptics'];
+
+function applySettings() {
+  setSoundVolume(settings.soundVolume / 100);
+  setHaptics(settings.haptics);
+  setShake(settings.shake);
+  setReducedMotion(settings.calm);
+  bg.setCalm(settings.calm);
+  const root = document.documentElement.dataset;
+  root.flashing = settings.flashing ? 'on' : 'off';
+  root.calm = settings.calm ? 'on' : 'off';
+  root.scanlines = settings.scanlines ? 'on' : 'off';
+  $('music').volume = settings.musicVolume / 100;
+}
+
+function bindSettings() {
+  const open = () => {
+    syncSettings();
+    $('settings').hidden = false;
+    sfx.pick();
+  };
+  for (const id of ['settings-button', 'game-settings-button', 'table-settings-button']) $(id).addEventListener('click', open);
+  $('settings-close').addEventListener('click', () => { $('settings').hidden = true; });
+  $('set-music').addEventListener('input', () => {
+    settings.musicVolume = Number($('set-music').value);
+    applySettings();
+    syncSettings();
+    syncMusic();
+  });
+  $('set-music').addEventListener('change', () => store.set('settings', settings));
+  $('set-sound').addEventListener('input', () => {
+    settings.soundVolume = Number($('set-sound').value);
+    applySettings();
+    syncSettings();
+  });
+  $('set-sound').addEventListener('change', () => {
+    store.set('settings', settings);
+    sfx.foundation(4);
+  });
+  for (const key of TOGGLES) {
+    $(`set-${key}`).addEventListener('click', () => {
+      settings[key] = !settings[key];
+      applySettings();
+      saveSettings();
+      syncSettings();
+      if (key === 'haptics') buzz(30);
+      if (key === 'shake') shake(0.4);
+      sfx.pick();
+    });
+  }
+  const full = $('set-fullscreen');
+  full.hidden = !document.documentElement.requestFullscreen;
+  full.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  });
+}
+
+function syncSettings() {
+  $('set-music').value = settings.musicVolume;
+  $('set-music-value').textContent = settings.musicVolume;
+  $('set-sound').value = settings.soundVolume;
+  $('set-sound-value').textContent = settings.soundVolume;
+  for (const key of TOGGLES) {
+    const btn = $(`set-${key}`);
+    btn.setAttribute('aria-pressed', String(settings[key]));
+    btn.querySelector('b').textContent = settings[key] ? 'On' : 'Off';
+  }
+}
+
+function closeNotice(keep) {
+  store.set('notice-seen', true);
+  if (!keep) Object.assign(settings, { scares: false, flashing: false, shake: false });
+  applySettings();
+  saveSettings();
+  $('notice').hidden = true;
+  sfx.pick();
+}
+
+/** Change a button's text without losing its pixel icon. */
+function setLabel(el, text) {
+  const icon = el.querySelector(':scope > .ico');
+  el.textContent = text;
+  if (icon) el.prepend(icon);
 }
 
 function buildGamePicker() {
@@ -220,15 +325,7 @@ function syncMenu() {
     });
     return btn;
   }));
-  $('sound-toggle').textContent = `Sound: ${settings.sound ? 'on' : 'off'}`;
-  $('sound-toggle').setAttribute('aria-pressed', String(settings.sound));
-  $('music-toggle').textContent = `Music: ${settings.music ? 'on' : 'off'}`;
-  $('music-toggle').setAttribute('aria-pressed', String(settings.music));
-  $('scare-toggle').textContent = `Scares: ${settings.scares ? 'on' : 'off'}`;
-  $('scare-toggle').setAttribute('aria-pressed', String(settings.scares));
-  $('haptics-toggle').textContent = `Buzz: ${settings.haptics ? 'on' : 'off'}`;
-  $('haptics-toggle').setAttribute('aria-pressed', String(settings.haptics));
-  if (trophies) $('trophies-button').textContent = `Trophies ${trophies.count()}`;
+  if (trophies) setLabel($('trophies-button'), `Trophies ${trophies.count()}`);
   $('continue-button').hidden = !store.get(`save:${settings.game}`, null);
   $('friends-button').hidden = settings.game !== 'holdem';
   $('menu-stats').textContent = menuStats(settings.game);
@@ -246,10 +343,11 @@ function menuStats(id) {
   return `${s.won} escaped of ${s.played}${s.bestTime ? ` · fastest ${formatTime(s.bestTime)}` : ''}`;
 }
 
+/** Music plays whenever it's turned up (browsers wait for a first tap). */
 function syncMusic() {
   const music = $('music');
-  music.volume = 0.45;
-  if (settings.music) music.play().catch(() => {});
+  music.volume = settings.musicVolume / 100;
+  if (settings.musicVolume > 0) music.play().catch(() => {});
   else music.pause();
 }
 
@@ -774,7 +872,7 @@ function armScare() {
 function scare() {
   const dim = $('dim');
   const eyes = $('eyes');
-  const steps = [[0, 0.75], [90, 0.1], [160, 0.85], [260, 0.55]];
+  const steps = settings.flashing ? [[0, 0.75], [90, 0.1], [160, 0.85], [260, 0.55]] : [[0, 0.55]];
   steps.forEach(([t, o]) => setTimeout(() => { dim.style.opacity = String(o); }, t));
   eyes.style.left = `${10 + Math.random() * 75}%`;
   eyes.style.top = `${15 + Math.random() * 65}%`;
@@ -790,14 +888,15 @@ function scare() {
 
 function onKey(e) {
   const key = e.key.toLowerCase();
-  if (!$('rules').hidden || !$('trophy-room').hidden) {
+  const dialogs = ['rules', 'trophy-room', 'settings', 'about'];
+  if (dialogs.some((id) => !$(id).hidden)) {
     if (key === 'escape' || key === 'enter') {
       e.preventDefault();
-      closeRules();
-      $('trophy-room').hidden = true;
+      for (const id of dialogs) $(id).hidden = true;
     }
     return;
   }
+  if (!$('notice').hidden || !$('crash').hidden) return;
   if (key === '?' && $('menu-screen').hidden) {
     openRules(gameId);
     return;
@@ -825,7 +924,29 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
-boot().then(() => {
+// Something threw: offer a reload instead of leaving a frozen table. Only our
+// own code counts (not browser extensions), and only the first time.
+let crashed = false;
+function crash(err) {
+  if (crashed || !$('crash')) return;
+  crashed = true;
+  console.error(err);
+  try { saveGame(); } catch { /* the save is what broke */ }
+  $('crash').hidden = false;
+}
+window.addEventListener('error', (e) => {
+  if (e.filename && !e.filename.startsWith(window.location.origin)) return;
+  crash(e.error ?? e.message);
+});
+window.addEventListener('unhandledrejection', (e) => crash(e.reason));
+$('crash-reload').addEventListener('click', () => window.location.reload());
+$('crash-dismiss').addEventListener('click', () => {
+  $('crash').hidden = true;
+  crashed = false;
+});
+
+boot().then((ok) => {
+  if (!ok) return;
   // Opened from an invite link: straight to the lobby, then tidy the address bar.
   const code = new URLSearchParams(window.location.search).get('join');
   if (!code) return;

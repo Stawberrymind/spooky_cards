@@ -3,7 +3,8 @@ import { cardImage } from './art.js';
 // Juice: particles, screen shake, floating text, haptics, and the bouncing
 // win cascade. Everything here is cosmetic and safe to skip.
 
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let shakeOn = true;
 const canvas = document.getElementById('fx');
 const ctx = canvas.getContext('2d');
 const stage = document.getElementById('stage');
@@ -88,8 +89,17 @@ export function burst(x, y, { count = 18, palette = 'ember', speed = 6, gravity 
   kick();
 }
 
+/** Calm mode: no particles, no shaking (also follows the system setting). */
+export function setReducedMotion(on) {
+  reduceMotion = on || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function setShake(on) {
+  shakeOn = on;
+}
+
 export function shake(amount = 0.4) {
-  if (reduceMotion) return;
+  if (reduceMotion || !shakeOn) return;
   trauma = Math.min(1, trauma + amount);
   kick();
 }
