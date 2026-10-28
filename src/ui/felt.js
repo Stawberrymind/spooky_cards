@@ -53,6 +53,22 @@ export class Felt {
     return `translate(${x - this.cardW / 2}px, ${y - this.cardH / 2}px) rotate(${rot}deg) scale(${scale})`;
   }
 
+  /** Replace a face-down stand-in with the real card, in the same spot, ready to flip. */
+  swap(oldId, card) {
+    const old = this.cards.get(oldId);
+    if (!old) return;
+    const el = cardElement(card);
+    el.classList.add('is-instant');
+    el.style.transform = old.style.transform;
+    el.style.zIndex = old.style.zIndex;
+    el.className = `${old.className} is-instant`.replace('face-up', '');
+    old.replaceWith(el);
+    this.cards.delete(oldId);
+    this.cards.set(card.id, el);
+    void el.offsetWidth;
+    el.classList.remove('is-instant');
+  }
+
   flash(cardId, className, ms = 900) {
     const el = this.cards.get(cardId);
     if (!el) return;

@@ -10,6 +10,7 @@ import { createPoker } from './modes/poker.js';
 import { createBlackjack } from './modes/blackjack.js';
 import { createVideoPoker } from './modes/videopoker.js';
 import { createTrophies } from './ui/trophies.js';
+import { createLobbyScreen } from './ui/lobby-screen.js';
 
 const $ = (id) => document.getElementById(id);
 const BASE = import.meta.env.BASE_URL;
@@ -68,6 +69,8 @@ let busyUntil = 0;
 let table = null; // the running poker/blackjack/video poker controller
 const modes = {};
 let trophies = null;
+let lobbyScreen = null;
+let lastResultLobby = false;
 let isDaily = false;
 
 const WHISPERS = {
@@ -109,6 +112,14 @@ async function boot() {
   modes.poker = createPoker(tableCtx);
   modes.blackjack = createBlackjack(tableCtx);
   modes.videopoker = createVideoPoker(tableCtx);
+  lobbyScreen = createLobbyScreen({
+    $,
+    store,
+    sfx,
+    whisper,
+    onStart: (opts) => startTable('holdem', opts),
+    onExit: () => showMenu(),
+  });
   syncMenu();
   window.addEventListener('resize', () => {
     if (table) table.layout();
@@ -155,7 +166,8 @@ async function boot() {
   $('new-button').addEventListener('click', () => newGame());
   $('menu-button').addEventListener('click', showMenu);
   $('table-menu-button').addEventListener('click', showMenu);
-  $('win-again').addEventListener('click', () => newGame());
+  $('win-again').addEventListener('click', () => (lastResultLobby ? showLobby() : newGame()));
+  $('friends-button').addEventListener('click', () => showLobby());
   $('win-menu').addEventListener('click', showMenu);
   document.addEventListener('pointerdown', unlockAudio, { once: true });
   document.addEventListener('keydown', onKey);
@@ -218,6 +230,7 @@ function syncMenu() {
   $('haptics-toggle').setAttribute('aria-pressed', String(settings.haptics));
   if (trophies) $('trophies-button').textContent = `Trophies ${trophies.count()}`;
   $('continue-button').hidden = !store.get(`save:${settings.game}`, null);
+  $('friends-button').hidden = settings.game !== 'holdem';
   $('menu-stats').textContent = menuStats(settings.game);
 }
 
@@ -254,10 +267,12 @@ function animatePumpkin() {
 function showMenu() {
   saveGame();
   stopTable();
+  lobbyScreen?.leave();
   stopCascade();
   $('win').hidden = true;
   $('game-screen').hidden = true;
   $('table-screen').hidden = true;
+  $('lobby-screen').hidden = true;
   $('stage').dataset.screen = 'menu';
   $('menu-screen').hidden = false;
   clearTimeout(scareTimer);
@@ -270,11 +285,29 @@ function stopTable() {
   table = null;
 }
 
+/** The lobby screen; `code` comes from an invite link. */
+function showLobby(code) {
+  saveGame();
+  stopTable();
+  stopCascade();
+  game = null;
+  $('menu-screen').hidden = true;
+  $('game-screen').hidden = true;
+  $('table-screen').hidden = true;
+  $('win').hidden = true;
+  $('lobby-screen').hidden = false;
+  $('stage').dataset.screen = 'lobby';
+  clearTimeout(scareTimer);
+  clearTimeout(idleTimer);
+  lobbyScreen.open(code);
+}
+
 function showGame() {
   stopTable();
   $('menu-screen').hidden = true;
   $('win').hidden = true;
   $('table-screen').hidden = true;
+  $('lobby-screen').hidden = true;
   $('game-screen').hidden = false;
   $('stage').dataset.screen = 'solitaire';
   $('board').style.opacity = '';
@@ -309,6 +342,7 @@ function startTable(id, options) {
   gameId = id;
   $('menu-screen').hidden = true;
   $('game-screen').hidden = true;
+  $('lobby-screen').hidden = true;
   $('win').hidden = true;
   $('table-screen').hidden = false;
   $('stage').dataset.screen = 'table';
@@ -636,7 +670,8 @@ function winSequence() {
 }
 
 /** The end-of-game dialog, for any game. */
-function showResult({ won, eyebrow, title, stats: rows }, { quiet = false } = {}) {
+function showResult({ won, eyebrow, title, stats: rows, lobby = false }, { quiet = false } = {}) {
+  lastResultLobby = lobby;
   $('win-eyebrow').textContent = eyebrow;
   $('win-title').textContent = title;
   $('win-stats').replaceChildren(...rows.map(([label, value]) => {
@@ -646,7 +681,7 @@ function showResult({ won, eyebrow, title, stats: rows }, { quiet = false } = {}
     cell.querySelector('dd').textContent = value;
     return cell;
   }));
-  $('win-again').textContent = GAMES[gameId].mode === 'poker' ? 'Sit down again' : 'Deal again';
+  $('win-again').textContent = lobby ? 'Back to lobby' : GAMES[gameId].mode === 'poker' ? 'Sit down again' : 'Deal again';
   $('win').dataset.won = String(won);
   if (!quiet) {
     if (won) {
@@ -790,4 +825,10 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
-boot();
+boot().then(() => {
+  // Opened from an invite link: straight to the lobby, then tidy the address bar.
+  const code = new URLSearchParams(window.location.search).get('join');
+  if (!code) return;
+  window.history.replaceState(null, '', window.location.pathname);
+  showLobby(code);
+});

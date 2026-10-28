@@ -13,7 +13,7 @@ import { describe } from './hands.js';
 //   { type: 'action', seat, action, amount, bet }   fold / check / call / raise / all-in
 //   { type: 'collect' }                              bets swept into the pot
 //   { type: 'street', street, cards }                flop, turn, river
-//   { type: 'showdown', hands, pots }                hands: { seat: { name, cards, score } }
+//   { type: 'showdown', hands, holes, pots }         hands: { seat: { name, cards, score } }, holes: { seat: [2 cards] }
 //   { type: 'win', seat, amount }                    everyone else folded
 //   { type: 'end' }                                  hand over
 //
@@ -148,6 +148,8 @@ export class Holdem {
       canCheck: toCall === 0,
       raise: canRaise ? { min: Math.min(this.currentBet + this.minRaise, maxTo), max: maxTo } : null,
       pot: this.pot(),
+      currentBet: this.currentBet,
+      chips: s.chips,
     };
   }
 
@@ -247,7 +249,9 @@ export class Holdem {
   showdown() {
     this.street = 'showdown';
     const hands = {};
+    const holes = {};
     for (const s of this.contenders()) {
+      holes[s.seat] = s.hole;
       const h = describe([...s.hole, ...this.board]);
       hands[s.seat] = { name: h.name, cards: h.cards, score: h.score };
     }
@@ -266,7 +270,7 @@ export class Holdem {
       return { amount: pot.amount, eligible: pot.eligible, winners: paid, hand: hands[winners[0]].name };
     });
     this.result = { hands, pots };
-    return [{ type: 'showdown', hands, pots }, ...this.finishHand()];
+    return [{ type: 'showdown', hands, holes, pots }, ...this.finishHand()];
   }
 
   clockwiseFromButton(seat) {

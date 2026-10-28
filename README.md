@@ -61,6 +61,17 @@ No-limit Texas Hold'em against 1 to 5 bots, tournament style: everyone starts wi
 - Simplification: any raise, even a short all-in, re-opens the betting.
 - Leaving mid-hand saves the table as it was before that hand; Continue deals a fresh hand.
 
+#### Playing with friends
+
+Pick Hold'em on the menu and press **Play with friends**.
+
+- **Create lobby** gives you a 4-letter code. Share it, or use **Share invite link** (`…/spooky_cards/?join=CODE` opens straight into your lobby).
+- Friends type the code and press **Join**. Up to 6 players; choose how many bots fill the empty chairs and how good they are.
+- The host presses **Deal them in**. Everyone sees themselves at the bottom of the table. **BOO!**, **GG** and friends send a bubble over your seat.
+- If a friend leaves, their hands fold themselves. If the host leaves, the game ends for everyone. After a game, **Back to lobby** deals a rematch with the same people.
+
+How it works: the host's browser runs the game, and players connect browser to browser over WebRTC using [PeerJS](https://github.com/peers/peerjs). The free public PeerJS server only introduces players; it never sees the cards. Each player is sent only their own hole cards until the showdown, so nobody can peek using their browser's developer tools. As with any peer-to-peer game, connected players can see each other's IP addresses. Some strict networks (certain office or school Wi-Fi) block these direct connections.
+
 ### Video Poker
 
 Jacks or Better with the full-pay 9/6 table. Bet 1 to 5 souls, tap the cards you want to keep, then draw once. A pair of Jacks or better pays; a Royal Flush on a 5-soul bet pays 4,000. **Hint** holds the cards a decent strategy would keep. Your bank carries over between visits. Keys: `1`–`5` hold, `H` hint, `Enter` deal or draw.
@@ -88,7 +99,10 @@ Jacks or Better with the full-pay 9/6 table. Bet 1 to 5 souls, tap the cards you
 | `src/engine/games.js` | The menu's list of games, their options and start-of-game whispers |
 | `src/engine/poker/` | Hand ranking (`hands.js`), the Hold'em betting and side-pot engine (`holdem.js`), bots (`bot.js`), Video Poker (`videopoker.js`) |
 | `src/engine/blackjack.js` | Blackjack rules and payouts |
-| `src/modes/poker.js`, `videopoker.js`, `blackjack.js` | The table screens: play the engine's events back as animation, take your actions |
+| `src/modes/poker.js`, `videopoker.js`, `blackjack.js` | The table screens: play the engine's events back as animation, take your actions. Hold'em runs solo, as a lobby host, or as a guest |
+| `src/net/lobby.js` | Creating and joining lobbies with PeerJS |
+| `src/net/protocol.js` | What the host sends each guest (hiding other players' cards) and checks on what guests send back |
+| `src/ui/lobby-screen.js` | The Play with friends screen and invite links |
 | `src/ui/trophies.js` | Trophies, the trophy room and card back picker |
 | `assets/sw.js`, `assets/manifest.webmanifest`, `assets/icons/` | Offline play and installing to a home screen |
 | `src/ui/felt.js` | Places cards and chips on the poker and blackjack tables |

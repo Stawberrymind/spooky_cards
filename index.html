@@ -33,6 +33,7 @@
           <button id="continue-button" class="btn btn--big btn--ecto" type="button" hidden>Continue</button>
           <button id="play-button" class="btn btn--big btn--blood" type="button">New game</button>
           <button id="daily-button" class="btn btn--big btn--pumpkin" type="button">Daily haunt</button>
+          <button id="friends-button" class="btn btn--big btn--ecto" type="button" hidden>Play with friends</button>
           <div class="menu-options">
             <span id="variant-toggles" class="variant-toggles"></span>
             <button id="sound-toggle" class="btn btn--small" type="button" aria-pressed="true">Sound: on</button>
@@ -70,6 +71,37 @@
           </div>
         </header>
         <div id="board" class="board" aria-label="Cards"></div>
+      </section>
+
+      <!-- Lobbies: Hold'em with friends -->
+      <section id="lobby-screen" class="menu lobby" aria-label="Play with friends" hidden>
+        <h2 class="lobby-title">The Haunted Table</h2>
+        <p class="lobby-sub">Hold'em with friends. Bots fill the empty chairs.</p>
+        <label class="field">
+          <span>Your name</span>
+          <input id="lobby-name" type="text" maxlength="14" autocomplete="nickname" placeholder="Lost Soul">
+        </label>
+        <div id="lobby-start" class="lobby-panel">
+          <button id="lobby-create" class="btn btn--big btn--blood" type="button">Create lobby</button>
+          <p class="lobby-or">or join one</p>
+          <div class="lobby-join">
+            <input id="lobby-code" type="text" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Lobby code">
+            <button id="lobby-join" class="btn btn--big btn--ecto" type="button">Join</button>
+          </div>
+        </div>
+        <div id="lobby-room" class="lobby-panel" hidden>
+          <p class="lobby-code-label">lobby code</p>
+          <p id="lobby-code-show" class="lobby-code"></p>
+          <button id="lobby-invite" class="btn btn--pumpkin" type="button">Share invite link</button>
+          <ul id="lobby-players" class="lobby-players"></ul>
+          <div id="lobby-host-options" class="menu-options">
+            <button id="lobby-bots" class="btn btn--small" type="button">Bots: 1</button>
+            <button id="lobby-difficulty" class="btn btn--small" type="button">Level: Normal</button>
+          </div>
+          <button id="lobby-go" class="btn btn--big btn--blood" type="button">Deal them in</button>
+        </div>
+        <p id="lobby-status" class="lobby-status" aria-live="polite"></p>
+        <button id="lobby-back" class="btn" type="button">Back</button>
       </section>
 
       <!-- Poker and Blackjack -->
